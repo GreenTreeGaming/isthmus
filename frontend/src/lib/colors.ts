@@ -59,4 +59,20 @@ export const LOAD_GRADIENT_CSS = `linear-gradient(90deg, ${STOPS.map(
   ([x, c]) => `rgb(${c.join(',')}) ${Math.round((x / 1.4) * 100)}%`,
 ).join(', ')})`
 
+/** Sequential purple for "how often this block is told to shelter" (0..1). */
+export function frequencyColor(share: number): RGBA {
+  const t = Math.max(0, Math.min(1, share))
+  if (t === 0) return [60, 66, 80, 30]
+  const lo = [76, 52, 150]
+  const hi = [216, 196, 255]
+  return [
+    Math.round(lo[0] + (hi[0] - lo[0]) * t),
+    Math.round(lo[1] + (hi[1] - lo[1]) * t),
+    Math.round(lo[2] + (hi[2] - lo[2]) * t),
+    Math.round(90 + 150 * t),
+  ]
+}
+
+export const FREQUENCY_GRADIENT_CSS = `linear-gradient(90deg, rgba(76,52,150,0.4), rgb(216,196,255))`
+
 export const rgb = (c: readonly number[], a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`

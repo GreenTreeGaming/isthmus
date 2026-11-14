@@ -11,10 +11,12 @@ export function SummaryCards({ summary: s, loading }: Props) {
   const servedPct = s && s.need_bus_total > 0 ? served / s.need_bus_total : 1
   return (
     <div className={`cards ${loading ? 'stale' : ''}`}>
-      <div className="card">
-        <div className="card-label">Clearance time</div>
-        <div className="card-value">{s ? fmtDuration(s.clearance_time_s) : '—'}</div>
-        <div className="card-sub">until the last car is out</div>
+      <div className="card hero-card">
+        <div className="card-label">Everyone out in</div>
+        <div className="card-value">{!s ? '—' : s.people_evacuating > 0 ? fmtDuration(s.sim_clearance_s) : 'No one leaves'}</div>
+        <div className="card-sub keep">
+          {s && s.people_evacuating > 0 ? `from alert · driving time ${fmtDuration(s.clearance_time_s)}` : 'from alert until the last car is out'}
+        </div>
       </div>
       <div className="card">
         <div className="card-label">

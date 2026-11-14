@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getRail } from './api'
+import { getBlockFrequency, getBlocks, getRail } from './api'
 import { ControlPanel } from './components/ControlPanel'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
@@ -9,11 +9,10 @@ import { derive } from './lib/derive'
 import { snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
 import { PlanningTab } from './tabs/PlanningTab'
-import type { RailCollection } from './types'
+import type { BlockFrequency, BlockGeoCollection, RailCollection } from './types'
 import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
 type Tab = 'live' | 'planning' | 'assumptions'
-const SNAP_MAX_M = 400
 
 const SOURCE_LABEL: Record<string, [string, string]> = {
   placeholder: ['Placeholder data', 'warn'],
@@ -26,18 +25,40 @@ export default function App() {
   const { params, setParams, update, result, source, loading, error, run, autoRun, setAutoRun } = useScenario()
   const [rail, setRail] = useState<RailCollection | null>(null)
   const [pickHint, setPickHint] = useState<string | null>(null)
-  const [toggles, setToggles] = useState<LayerToggles>({ blocks: true, heatmap: false, roads: true, traffic: true, buses: true })
+  const [toggles, setToggles] = useState<LayerToggles>({ blocks: true, heatmap: false, roads: true, traffic: true, buses: true, frequency: false })
   const [time, setTime] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [hoveredBus, setHoveredBus] = useState<number | null>(null)
 
+  const [blockGeo, setBlockGeo] = useState<BlockGeoCollection | null>(null)
+  const [frequency, setFrequency] = useState<{ map: Map<string, BlockFrequency>; max: number } | null>(null)
+
+  // Static data, fetched once: rail lines, block outlines (/simulate only sends per-run block properties),
+  // and the batch "how often told to shelter" table.
   useEffect(() => {
     getRail()
-      .then((r) => setRail(r.data))
+      .then((r) => {
+        setRail(r.data)
+        // Make sure the starting pin sits on a rail line too.
+        setParams((p) => {
+          const snap = snapToRail(r.data, p.release_lon, p.release_lat)
+          return snap && snap[2] > 1 ? { ...p, release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) } : p
+        })
+      })
       .catch(() => setPickHint('Rail lines unavailable — is the backend running?'))
-  }, [])
+    getBlocks()
+      .then((r) => setBlockGeo(r.data))
+      .catch(() => undefined) // surfaced via the simulate error banner
+    getBlockFrequency()
+      .then((r) => {
+        if (!r.data.length) return
+        const map = new Map(r.data.map((f) => [f.block_id, f]))
+        setFrequency({ map, max: Math.max(0.01, ...r.data.map((f) => f.share_shelter)) })
+      })
+      .catch(() => undefined)
+  }, [setParams])
 
-  const derived = useMemo(() => (result ? derive(result) : null), [result])
+  const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
 
   // A new result may be shorter than the current timeline position.
   const timeInRange = time != null && derived ? Math.min(time, derived.duration_s) : time
@@ -45,12 +66,10 @@ export default function App() {
   const onPickRelease = useCallback(
     (lon: number, lat: number) => {
       if (!rail) return
+      // Derailments only happen on track: always snap to the nearest rail line.
       const snap = snapToRail(rail, lon, lat)
-      if (!snap || snap[2] > SNAP_MAX_M) {
-        setPickHint('Derailments happen on rail lines — click closer to a dashed rail line.')
-        return
-      }
-      setPickHint(null)
+      if (!snap) return
+      setPickHint(snap[2] > 150 ? 'Snapped to the nearest rail line.' : null)
       setParams((p) => ({ ...p, release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) }))
     },
     [rail, setParams],
@@ -99,7 +118,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        <div className={`view live ${tab === 'live' ? '' : 'hidden'}`}>
+        <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''}`}>
           <MapView
             result={result}
             derived={derived}
@@ -110,7 +129,15 @@ export default function App() {
             onPickRelease={onPickRelease}
             hoveredBus={hoveredBus}
             setHoveredBus={setHoveredBus}
+            blockGeo={blockGeo}
+            frequency={frequency?.map ?? null}
+            frequencyMax={frequency?.max ?? 1}
           />
+          {loading && (
+            <div className="sim-overlay" role="status" aria-live="polite">
+              <span className="spinner" /> Simulating scenario…
+            </div>
+          )}
           <ControlPanel
             params={params}
             update={update}
@@ -130,7 +157,11 @@ export default function App() {
               </div>
             )}
           </div>
-          <Legend toggles={toggles} setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))} />
+          <Legend
+            toggles={toggles}
+            setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))}
+            frequencyMax={frequency ? frequency.max : null}
+          />
           {derived && (
             <Timeline
               time={timeInRange}
@@ -138,7 +169,7 @@ export default function App() {
               duration={derived.duration_s}
               playing={playing}
               setPlaying={setPlaying}
-              clearance={result?.summary.clearance_time_s ?? null}
+              clearance={result ? result.summary.sim_clearance_s || result.summary.clearance_time_s : null}
             />
           )}
         </div>

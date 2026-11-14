@@ -20,7 +20,7 @@ ENGINE_MODE: EngineMode = os.environ.get("ISTHMUS_ENGINE", "placeholder")  # typ
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONTRACT_RESPONSE = REPO_ROOT / "contracts" / "api_response.json"
 PLACEHOLDER_DIR = Path(__file__).resolve().parent / "placeholder"
-GOLD_DIR = REPO_ROOT / "data" / "gold"
+GOLD_DIR = Path(os.environ.get("ISTHMUS_GOLD_DIR", REPO_ROOT / "data" / "gold"))
 
 
 def silver_dir() -> Path:

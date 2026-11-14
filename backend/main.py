@@ -37,9 +37,32 @@ async def lifespan(_: FastAPI):
         log.info("engine network loaded from %s", data_dir)
     elif config.ENGINE_MODE == "placeholder":
         STATE["placeholder"] = _load_json(config.CONTRACT_RESPONSE)
+    STATE["blocks_geo"] = _static_blocks(config.ENGINE_MODE)
     log.info("engine mode: %s", config.ENGINE_MODE)
     yield
     STATE.clear()
+
+
+def _static_blocks(mode: str) -> dict[str, Any]:
+    if mode == "real":
+        from backend.convert import blocks_geojson
+        return blocks_geojson(STATE["lookup"])
+    if mode == "mock":
+        from backend.mock import blocks_geojson
+        return blocks_geojson()
+    fc = STATE["placeholder"]["blocks"]
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"block_id": f["properties"]["block_id"]}, "geometry": f["geometry"]}
+        for f in fc["features"]]}
+
+
+def compact_blocks(fc: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """FeatureCollection of blocks -> {block_id: properties without geometry}."""
+    out = {}
+    for f in fc["features"]:
+        props = dict(f["properties"])
+        out[str(props.pop("block_id"))] = props
+    return out
 
 
 app = FastAPI(title="Isthmus API", lifespan=lifespan)
@@ -66,6 +89,7 @@ def simulate(body: ScenarioParamsIn, response: Response) -> dict[str, Any]:
         out = dict(STATE["placeholder"])
         out.pop("_comment", None)
         out["params"] = params_to_json(params)
+        out["blocks"] = compact_blocks(out["blocks"])
         return out
     if mode == "mock":
         from backend.mock import run_mock
@@ -80,17 +104,34 @@ def simulate(body: ScenarioParamsIn, response: Response) -> dict[str, Any]:
     return result_to_response(result, STATE["lookup"])
 
 
+@app.get("/blocks")
+def blocks(response: Response) -> dict[str, Any]:
+    """Static block outlines (fetch once). /simulate returns per-run block properties keyed by block_id."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    response.headers["X-Isthmus-Source"] = STATE.get("mode", config.ENGINE_MODE)
+    return STATE["blocks_geo"]
+
+
 @app.get("/insights")
 def insights(response: Response) -> dict[str, Any]:
-    """Gold-table JSON from data/gold/*.json (merged by file stem); placeholder until it exists."""
-    files = sorted(config.GOLD_DIR.glob("*.json")) if config.GOLD_DIR.exists() else []
-    if not files:
+    """data/gold/insights.json (written by engine/batch.py); placeholder until it exists."""
+    path = config.GOLD_DIR / "insights.json"
+    if not path.exists():
         response.headers["X-Isthmus-Source"] = "placeholder"
         return _load_json(config.PLACEHOLDER_DIR / "insights.json")
     response.headers["X-Isthmus-Source"] = "gold"
-    if len(files) == 1 and files[0].stem == "insights":
-        return {**_load_json(files[0]), "source": "gold"}
-    return {"source": "gold", **{f.stem: _load_json(f) for f in files}}
+    return _load_json(path)
+
+
+@app.get("/block-frequency")
+def block_frequency(response: Response) -> list[dict[str, Any]]:
+    """data/gold/block_frequency.json: [{block_id, share_shelter, share_evacuate}]; empty until batch runs."""
+    path = config.GOLD_DIR / "block_frequency.json"
+    if not path.exists():
+        response.headers["X-Isthmus-Source"] = "placeholder"
+        return []
+    response.headers["X-Isthmus-Source"] = "gold"
+    return _load_json(path)
 
 
 @app.get("/rail")
@@ -115,7 +156,7 @@ def assumptions(response: Response) -> dict[str, Any]:
     except ImportError:
         response.headers["X-Isthmus-Source"] = "placeholder"
         return base
-    items = [{"name": k, "value": v if isinstance(v, (int, float, str, bool)) else json.dumps(v, default=str)}
-             for k, v in vars(a).items() if k.isupper()]
+    from backend.assumptions_view import describe
+
     response.headers["X-Isthmus-Source"] = "engine"
-    return {**base, "source": "engine/assumptions.py", "groups": [{"title": "engine/assumptions.py", "items": items}]}
+    return {**base, "source": "engine/assumptions.py", "groups": describe(a)}

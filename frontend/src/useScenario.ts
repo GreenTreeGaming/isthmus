@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { simulate } from './api'
 import type { ScenarioParams, ScenarioResponse } from './types'
 
-// Defaults match the example in contracts/api_response.json.
+// Demo defaults: chlorine, large spill, 1.5 m/s wind from 225° (SW), daytime.
 export const DEFAULT_PARAMS: ScenarioParams = {
   release_lon: -89.3705,
   release_lat: 43.079,
   chemical: 'chlorine',
   spill_size: 'large',
   wind_from_deg: 225,
-  wind_speed_mps: 4,
+  wind_speed_mps: 1.5,
   time_of_day: 'day',
   compliance: 0.85,
   bus_count: 20,

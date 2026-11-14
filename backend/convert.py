@@ -59,6 +59,16 @@ def load_lookup(data_dir: Path) -> Lookup:
     return lk
 
 
+def blocks_geojson(lk: Lookup) -> dict[str, Any]:
+    """Static block outlines for GET /blocks, coordinates rounded to ~10 cm."""
+    def rnd(c: Any) -> Any:
+        return [rnd(x) for x in c] if isinstance(c[0], (list, tuple)) else [round(c[0], 6), round(c[1], 6)]
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"block_id": bid},
+         "geometry": {"type": g["type"], "coordinates": rnd(g["coordinates"])}}
+        for bid, g in lk.block_geom.items()]}
+
+
 def _num(x: float | None, nd: int = 1) -> float | None:
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return None
@@ -80,13 +90,12 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
         if text
     ]}
 
-    block_features = []
+    # Block geometry is static and served once by GET /blocks; here only per-run properties, keyed by id.
+    blocks: dict[str, dict[str, Any]] = {}
     for b in result.blocks:
-        geom = lk.block_geom.get(b.block_id)
-        if geom is None:
+        if b.block_id not in lk.block_geom:
             continue
-        block_features.append({"type": "Feature", "geometry": geom, "properties": {
-            "block_id": b.block_id,
+        blocks[b.block_id] = {
             "decision": b.decision,
             "plume_arrival_s": _num(b.plume_arrival_s),
             "est_exit_time_s": _num(b.est_exit_time_s),
@@ -95,7 +104,7 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
             "walkers": _num(b.walkers),
             "need_bus": _num(b.need_bus),
             "vulnerability": lk.block_vuln.get(b.block_id, 0.0),
-        }})
+        }
 
     edge_features = []
     for e in result.edges:
@@ -132,9 +141,10 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
             "need_bus_unserved": _num(s.need_bus_unserved, 0),
             "bottleneck_edge_ids": list(s.bottleneck_edge_ids),
             "runtime_ms": _num(s.runtime_ms, 0),
+            "sim_clearance_s": _num(getattr(s, "sim_clearance_s", 0.0)),
         },
         "zones": zones,
-        "blocks": {"type": "FeatureCollection", "features": block_features},
+        "blocks": blocks,
         "edges": {"type": "FeatureCollection", "features": edge_features},
         "buses": buses,
         "timeline": {

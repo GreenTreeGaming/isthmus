@@ -1,5 +1,5 @@
 // Mirrors contracts/api_response.json and contracts/engine_api.py::ScenarioParams.
-import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, LineString, MultiPolygon, Polygon } from 'geojson'
 
 export type Chemical = 'chlorine' | 'ammonia'
 export type SpillSize = 'small' | 'large'
@@ -29,6 +29,7 @@ export interface Summary {
   need_bus_unserved: number
   bottleneck_edge_ids: number[]
   runtime_ms: number
+  sim_clearance_s: number // alert -> last car out (traffic sim, incl. mobilization + waves)
 }
 
 export interface BlockProps {
@@ -60,14 +61,21 @@ export interface Bus {
   path: [number, number][]
 }
 
-export type BlockFeature = Feature<Polygon, BlockProps>
+export type BlockFeature = Feature<Polygon | MultiPolygon, BlockProps>
+/** Static outlines from GET /blocks (fetched once). */
+export type BlockGeoCollection = FeatureCollection<Polygon | MultiPolygon, { block_id: string }>
+export interface BlockFrequency {
+  block_id: string
+  share_shelter: number
+  share_evacuate: number
+}
 export type EdgeFeature = Feature<LineString, EdgeProps>
 
 export interface ScenarioResponse {
   params: ScenarioParams
   summary: Summary
   zones: FeatureCollection<Polygon, { kind: 'isolation' | 'protect' }>
-  blocks: FeatureCollection<Polygon, BlockProps>
+  blocks: Record<string, Omit<BlockProps, 'block_id'>> // geometry comes from GET /blocks
   edges: FeatureCollection<LineString, EdgeProps>
   buses: Bus[]
   timeline: { step_s: number; edge_load: Record<string, number[]> }
@@ -81,13 +89,23 @@ export interface Insights {
   top_bottlenecks: { edge_id: number; name: string; times_bottleneck: number; share: number }[]
   facilities_in_zone: { facility_id: string; name: string; type: string; share: number }[]
   worst_wind: { wind_from_deg: number; mean_clearance_s: number; mean_unserved: number; n?: number }[]
+  by_time_of_day?: {
+    time_of_day: string
+    mean_clearance_s: number
+    mean_evacuating: number
+    mean_sheltering: number
+    mean_unserved?: number
+  }[]
+  n_failed?: number
+  median_runtime_ms?: number | null
 }
 
 export interface AssumptionItem {
   name: string
   value: string | number | boolean
-  unit?: string
-  note?: string
+  unit?: string | null
+  note?: string | null
+  key?: string
 }
 export interface Assumptions {
   source: string

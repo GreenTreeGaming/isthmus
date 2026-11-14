@@ -68,6 +68,13 @@ def _h(*parts: object) -> float:
     return int.from_bytes(d[:4], "little") / 2**32
 
 
+def blocks_geojson() -> dict[str, Any]:
+    """Static block outlines for GET /blocks (ids match run_mock's `blocks` keys)."""
+    return {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"block_id": b["id"]}, "geometry": {"type": "Polygon", "coordinates": [b["ring"]]}}
+        for b in _blocks("day")]}
+
+
 def _blocks(time_of_day: str) -> list[dict[str, Any]]:
     out = []
     cell = 0.0026  # ~210 m
@@ -134,7 +141,9 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
     ]}
 
     speedup = 0.8 if p.contraflow else 1.0
-    feats, evac_pts = [], []
+    blocks_out: dict[str, dict[str, Any]] = {}
+    evac_pts = []
+    max_wave = 0
     evac_people = shelter_people = need_bus_total = 0.0
     bus_demand: list[tuple[float, str, float, float, float]] = []
     for b in _blocks(p.time_of_day):
@@ -170,7 +179,9 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
                 shelter_people += b["pop"]
         else:
             props["decision"] = "outside"
-        feats.append({"type": "Feature", "properties": props, "geometry": {"type": "Polygon", "coordinates": [b["ring"]]}})
+        if props.get("wave") is not None:
+            max_wave = max(max_wave, props["wave"])
+        blocks_out[props.pop("block_id")] = props
 
     # ---- roads
     total_veh = sum(e[2] for e in evac_pts)
@@ -265,9 +276,11 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
             "need_bus_unserved": round(max(0.0, need_bus_total - served)),
             "bottleneck_edge_ids": bottlenecks,
             "runtime_ms": round((time.perf_counter() - t0) * 1000),
+            # alert -> last car out: mobilization + wave stagger + driving
+            "sim_clearance_s": round(300 + max_wave * 600 + clearance) if clearance else 0,
         },
         "zones": zones,
-        "blocks": {"type": "FeatureCollection", "features": feats},
+        "blocks": blocks_out,
         "edges": {"type": "FeatureCollection", "features": edges},
         "buses": buses,
         "timeline": {"step_s": step, "edge_load": timeline},

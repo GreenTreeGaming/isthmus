@@ -1,4 +1,4 @@
-import type { BlockFeature, Bus, EdgeFeature, ScenarioResponse } from '../types'
+import type { BlockFeature, BlockFrequency, Bus, EdgeFeature, ScenarioResponse } from '../types'
 import type { BusStop, Derived } from '../lib/derive'
 import { COLORS, blockColor, loadColor, rgb } from '../lib/colors'
 import { fmtClock, fmtDuration, fmtInt, fmtPct } from '../lib/format'
@@ -17,6 +17,7 @@ interface Props {
   derived: Derived | null
   edgeLoadNow: Map<number, number>
   time: number | null
+  frequency: Map<string, BlockFrequency> | null
 }
 
 function Row({ k, v, tone }: { k: string; v: React.ReactNode; tone?: 'bad' | 'good' }) {
@@ -28,8 +29,22 @@ function Row({ k, v, tone }: { k: string; v: React.ReactNode; tone?: 'bad' | 'go
   )
 }
 
-function Body({ info, result, derived, edgeLoadNow, time }: Props) {
+function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
   switch (info.layer) {
+    case 'block-frequency': {
+      const id = (info.object as { properties: { block_id: string } }).properties.block_id
+      const f = frequency?.get(id)
+      return (
+        <>
+          <div className="tt-title">Across all simulated derailments</div>
+          <div className="tt-sub">Census block {id}</div>
+          <Row k="Told to shelter in place" v={f ? fmtPct(f.share_shelter) : '—'} />
+          <Row k="Told to evacuate" v={f ? fmtPct(f.share_evacuate) : '—'} />
+          <Row k="Unaffected" v={f ? fmtPct(Math.max(0, 1 - f.share_shelter - f.share_evacuate)) : '—'} />
+          <div className="tt-foot">Share of batch scenarios (gold table).</div>
+        </>
+      )
+    }
     case 'blocks': {
       const p = (info.object as BlockFeature).properties
       const label =

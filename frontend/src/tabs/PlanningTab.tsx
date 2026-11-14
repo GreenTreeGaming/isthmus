@@ -55,6 +55,11 @@ export function PlanningTab() {
     .map((w) => ({ ...w, dir: compass(w.wind_from_deg), clearance_min: Math.round(w.mean_clearance_s / 60) }))
   const worst = [...wind].sort((a, b) => b.mean_clearance_s - a.mean_clearance_s)[0]
   const barH = (n: number) => Math.max(220, n * 38 + 30)
+  const TOD_LABEL: Record<string, string> = { night: 'Night', day: 'Day', gameday: 'Game day' }
+  const TOD_ORDER = ['night', 'day', 'gameday']
+  const byTime = [...(data.by_time_of_day ?? [])]
+    .sort((a, b) => TOD_ORDER.indexOf(a.time_of_day) - TOD_ORDER.indexOf(b.time_of_day))
+    .map((t) => ({ ...t, label: TOD_LABEL[t.time_of_day] ?? t.time_of_day, clearance_min: Math.round(t.mean_clearance_s / 60) }))
 
   return (
     <div className="page planning">
@@ -64,6 +69,11 @@ export function PlanningTab() {
           <p className="muted">
             Recurring choke points across {data.n_scenarios ? fmtInt(data.n_scenarios) : 'many'} simulated derailments — every rail location, wind direction, time of day and chemical.
           </p>
+          <div className="run-stats">
+            {data.n_scenarios != null && <span><b>{fmtInt(data.n_scenarios)}</b> scenarios</span>}
+            {data.n_failed != null && <span className={data.n_failed > 0 ? 'bad' : ''}><b>{fmtInt(data.n_failed)}</b> failed</span>}
+            {data.median_runtime_ms != null && <span><b>{data.median_runtime_ms < 1000 ? `${Math.round(data.median_runtime_ms)} ms` : `${(data.median_runtime_ms / 1000).toFixed(1)} s`}</b> median run</span>}
+          </div>
         </div>
         {source === 'placeholder' && <span className="badge warn">Placeholder data — batch results pending</span>}
       </header>
@@ -78,7 +88,7 @@ export function PlanningTab() {
           <div className="hero">
             <div className="card-label">Worst wind direction</div>
             <div className="hero-value">From {worst.dir}</div>
-            <div className="muted">{fmtDuration(worst.mean_clearance_s)} average clearance</div>
+            <div className="muted">{fmtDuration(worst.mean_clearance_s)} on average to get everyone out</div>
           </div>
           <div className="hero">
             <div className="card-label">Facility most often inside the zone</div>
@@ -117,7 +127,7 @@ export function PlanningTab() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Clearance time by wind direction" sub="Average minutes until the last evacuating vehicle is out, by where the wind comes from">
+        <ChartCard title="Time to get everyone out, by wind direction" sub="Average minutes from alert until the last evacuating vehicle is out, by where the wind comes from">
           <ResponsiveContainer width="100%" height={320}>
             <RadarChart data={wind} outerRadius="72%">
               <PolarGrid stroke={GRID} />
@@ -141,6 +151,47 @@ export function PlanningTab() {
           </ResponsiveContainer>
         </ChartCard>
       </div>
+
+      {byTime.length > 0 && (
+        <div className="chart-grid">
+          <ChartCard title="Time to get everyone out, by time of day" sub="Average minutes from alert until the last evacuating vehicle is out">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={byTime} margin={{ left: 0, right: 12, top: 22, bottom: 4 }} barCategoryGap="30%">
+                <CartesianGrid vertical={false} stroke={GRID} />
+                <XAxis dataKey="label" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}m`} />
+                <Tooltip {...TT} formatter={(v: number) => [`${v} min`, 'Avg. time to get everyone out']} />
+                <Bar dataKey="clearance_min" fill={SERIES} radius={[4, 4, 0, 0]} maxBarSize={56}>
+                  <LabelList dataKey="clearance_min" position="top" formatter={(v: number) => `${v} min`} fill="#c3cfdc" fontSize={12} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+          <ChartCard title="Who moves, by time of day" sub="Average people per scenario">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th />
+                  <th>Evacuating</th>
+                  <th>Sheltering in place</th>
+                  <th>Waiting for a bus</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byTime.map((t) => (
+                  <tr key={t.time_of_day}>
+                    <th>{t.label}</th>
+                    <td>{fmtInt(t.mean_evacuating)}</td>
+                    <td>{fmtInt(t.mean_sheltering)}</td>
+                    <td>{t.mean_unserved == null ? '—' : fmtInt(t.mean_unserved)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="muted small">"Waiting for a bus" = residents who need a bus and are not picked up before the plume arrives.</p>
+          </ChartCard>
+        </div>
+      )}
     </div>
   )
 }
