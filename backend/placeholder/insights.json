@@ -1,0 +1,143 @@
+{
+ "_comment": "PLACEHOLDER insights until data/gold/ exists. Shape proposed by backend; gold-table JSON format is not yet in contracts/.",
+ "source": "placeholder",
+ "n_scenarios": 480,
+ "top_bottlenecks": [
+  {
+   "edge_id": 101,
+   "name": "John Nolen Dr",
+   "times_bottleneck": 312,
+   "share": 0.65
+  },
+  {
+   "edge_id": 1003,
+   "name": "E Washington Ave @ Blair St",
+   "times_bottleneck": 281,
+   "share": 0.585
+  },
+  {
+   "edge_id": 1210,
+   "name": "Williamson St",
+   "times_bottleneck": 204,
+   "share": 0.425
+  },
+  {
+   "edge_id": 1305,
+   "name": "University Ave",
+   "times_bottleneck": 176,
+   "share": 0.367
+  },
+  {
+   "edge_id": 1402,
+   "name": "Park St",
+   "times_bottleneck": 131,
+   "share": 0.273
+  },
+  {
+   "edge_id": 1501,
+   "name": "E Johnson St",
+   "times_bottleneck": 118,
+   "share": 0.246
+  },
+  {
+   "edge_id": 1602,
+   "name": "N First St",
+   "times_bottleneck": 77,
+   "share": 0.16
+  },
+  {
+   "edge_id": 1701,
+   "name": "W Washington Ave",
+   "times_bottleneck": 52,
+   "share": 0.108
+  }
+ ],
+ "facilities_in_zone": [
+  {
+   "facility_id": "fac_nh_01",
+   "name": "Downtown senior residence",
+   "type": "nursing_home",
+   "share": 0.41
+  },
+  {
+   "facility_id": "fac_hosp_01",
+   "name": "Downtown hospital",
+   "type": "hospital",
+   "share": 0.33
+  },
+  {
+   "facility_id": "fac_dorm_03",
+   "name": "Lakeshore residence hall",
+   "type": "dorm",
+   "share": 0.29
+  },
+  {
+   "facility_id": "fac_nh_02",
+   "name": "East isthmus care center",
+   "type": "nursing_home",
+   "share": 0.26
+  },
+  {
+   "facility_id": "fac_stad_01",
+   "name": "Stadium",
+   "type": "stadium",
+   "share": 0.18
+  },
+  {
+   "facility_id": "fac_dorm_01",
+   "name": "Southeast residence hall",
+   "type": "dorm",
+   "share": 0.12
+  }
+ ],
+ "worst_wind": [
+  {
+   "wind_from_deg": 0,
+   "mean_clearance_s": 3915,
+   "mean_unserved": 40,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 45,
+   "mean_clearance_s": 3512,
+   "mean_unserved": 40,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 90,
+   "mean_clearance_s": 3615,
+   "mean_unserved": 40,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 135,
+   "mean_clearance_s": 5612,
+   "mean_unserved": 54,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 180,
+   "mean_clearance_s": 6885,
+   "mean_unserved": 88,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 225,
+   "mean_clearance_s": 7288,
+   "mean_unserved": 93,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 270,
+   "mean_clearance_s": 7185,
+   "mean_unserved": 68,
+   "n": 60
+  },
+  {
+   "wind_from_deg": 315,
+   "mean_clearance_s": 5188,
+   "mean_unserved": 40,
+   "n": 60
+  }
+ ]
+}
