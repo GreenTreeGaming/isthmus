@@ -61,3 +61,32 @@ def test_deadlines_reported_and_respected():
         assert r.deadline_s[0] is None and r.deadline_s[-1] is None
         for t, d in zip(r.arrival_s[1:-1], r.deadline_s[1:-1]):
             assert t <= d
+
+
+def test_scipy_and_networkx_paths_agree(net):
+    """Fast (scipy) and fallback (networkx) shortest paths must give identical times and paths."""
+    from engine.buses import _paths_between, _paths_between_nx
+    G = net.G
+    keys = list(G.nodes)[::9][:12]
+    zone = {d["edge_id"] for _, _, d in list(G.edges(data=True))[::3]}
+
+    def time(u, v, d):
+        return d["travel_time_s"]
+
+    def cost(u, v, d):
+        return d["travel_time_s"] * (3 if d["edge_id"] in zone else 1)
+
+    def along(path, f):
+        return sum(f(a, b, G.edges[a, b]) for a, b in zip(path, path[1:]))
+
+    m1, p1 = _paths_between(G, keys, cost, time)
+    m2, p2 = _paths_between_nx(G, keys, cost, time)
+    for i in range(len(keys)):
+        for j in range(len(keys)):
+            a, b = p1.get((i, j)), p2.get((i, j))
+            assert a[0] == keys[i] and a[-1] == keys[j]
+            # both are lowest-cost routes (ties on a grid may pick different ones) ...
+            assert abs(along(a, cost) - along(b, cost)) < 1e-6
+            # ... and each reported time is the true time along the route it returned
+            assert abs(m1[i][j] - along(a, time)) < 1e-6
+            assert abs(m2[i][j] - along(b, time)) < 1e-6

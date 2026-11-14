@@ -97,7 +97,7 @@ BOARDING_S_PER_PERSON = 6         # mobility-limited riders, per person
 NURSING_BOARDING_S_PER_PERSON = 30
 BUS_ZONE_COST_MULT = 3.0          # buses avoid driving inside the zone unless picking up
 MAX_STOP_WALK_M = 400             # farther than this from a Metro stop → pick up at the block itself
-BUS_SOLVER_TIME_LIMIT_S = 1.0     # OR-Tools search budget
+BUS_SOLVER_TIME_LIMIT_S = 0.5     # OR-Tools search budget (interactive; batch uses 0.3)
 UNSERVED_PENALTY_PER_PERSON = 100_000
 
 # --------------------------------------------------------------------------- projection

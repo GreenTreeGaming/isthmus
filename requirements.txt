@@ -12,3 +12,4 @@ uvicorn[standard]
 requests
 pytest
 httpx
+scipy
