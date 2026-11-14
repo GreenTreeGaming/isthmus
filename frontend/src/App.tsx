@@ -223,6 +223,7 @@ export default function App() {
             selection={selection}
             onSelect={setSelection}
             fitTo={fitFor?.zones ?? null}
+            railOnly={demo != null}
           />
           </ErrorBoundary>
           {loading && (

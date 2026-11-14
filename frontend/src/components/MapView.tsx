@@ -45,6 +45,8 @@ interface Props {
   onSelect: (s: Selection | null) => void
   /** When this changes the camera flies to fit these zones (used by the guided demo). */
   fitTo: ScenarioResponse['zones'] | null
+  /** Only a click on the rail line itself moves the derailment (used in the demo, so stray clicks don't). */
+  railOnly: boolean
 }
 
 type Zones = ScenarioResponse['zones']
@@ -88,7 +90,7 @@ interface Particle {
   edge: EdgeFeature
 }
 
-export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo }: Props) {
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo, railOnly }: Props) {
   const initialViewState = useMemo(() => fitView(fitTo), [fitTo])
   // A clicked bus stays highlighted like a hovered one.
   const hoveredBus = hoverBus ?? (selection?.kind === 'bus' ? selection.id : null)
@@ -380,7 +382,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         id: 'stop-labels',
         data: hoveredBus == null ? [] : derived.stops.filter((s) => s.position != null && s.kind === 'pickup' && s.deadline_s != null && s.bus_id === hoveredBus),
         getPosition: (s) => s.position!,
-        getText: (s) => `${s.late ? 'late · ' : ''}by ${Math.round((s.deadline_s ?? 0) / 60)} min`,
+        getText: (s) => `${s.late ? 'LATE, ' : ''}by ${Math.round((s.deadline_s ?? 0) / 60)} min`,
         getSize: 11,
         getColor: (s) => (s.late ? [255, 150, 150, 255] : [220, 230, 245, 255]),
         getPixelOffset: [0, -14],
@@ -486,6 +488,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       }
     }
     onSelect(null)
+    if (railOnly && top?.layer?.id !== 'rail-hit') return
     const viewport = deck.getViewports()[0]
     if (!viewport) return
     const [lon, lat] = viewport.unproject([x, y])

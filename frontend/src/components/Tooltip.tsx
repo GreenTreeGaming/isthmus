@@ -105,7 +105,7 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
           <Row k="Stops" v={b.stops.length} />
           <Row k="Peak on board" v={fmtInt(picked)} />
           <Row k="Arrives at shelter" v={fmtClock(b.arrival_s.at(-1) ?? 0)} />
-          <div className="tt-sub mono">{b.stops.join(' → ')}</div>
+          <div className="tt-foot">Click for every stop's pickup time vs. when the gas arrives.</div>
         </>
       )
     }
@@ -118,7 +118,6 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
             {title} · Bus {s.bus_id + 1}
             {s.kind === 'pickup' && s.deadline_s != null && (s.late ? <span className="pill bad">after plume</span> : <span className="pill good">before plume</span>)}
           </div>
-          <div className="tt-sub mono">{s.stop_id}</div>
           <Row k="Bus arrives" v={fmtClock(s.arrival_s)} />
           {s.kind === 'pickup' && <Row k="Pickup deadline (plume)" v={s.deadline_s == null ? '—' : fmtClock(s.deadline_s)} tone={s.late ? 'bad' : 'good'} />}
           <Row k="On board after stop" v={fmtInt(s.load)} />
