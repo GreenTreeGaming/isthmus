@@ -1,122 +1,150 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { getRail } from './api'
+import { ControlPanel } from './components/ControlPanel'
+import { Legend } from './components/Legend'
+import { MapView, type LayerToggles } from './components/MapView'
+import { SummaryCards } from './components/SummaryCards'
+import { Timeline } from './components/Timeline'
+import { derive } from './lib/derive'
+import { snapToRail } from './lib/geo'
+import { AssumptionsTab } from './tabs/AssumptionsTab'
+import { PlanningTab } from './tabs/PlanningTab'
+import type { RailCollection } from './types'
+import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
-function App() {
-  const [count, setCount] = useState(0)
+type Tab = 'live' | 'planning' | 'assumptions'
+const SNAP_MAX_M = 400
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+const SOURCE_LABEL: Record<string, [string, string]> = {
+  placeholder: ['Placeholder data', 'warn'],
+  mock: ['Mock engine', 'warn'],
+  real: ['Live engine', 'ok'],
 }
 
-export default App
+export default function App() {
+  const [tab, setTab] = useState<Tab>('live')
+  const { params, setParams, update, result, source, loading, error, run, autoRun, setAutoRun } = useScenario()
+  const [rail, setRail] = useState<RailCollection | null>(null)
+  const [pickHint, setPickHint] = useState<string | null>(null)
+  const [toggles, setToggles] = useState<LayerToggles>({ blocks: true, heatmap: false, roads: true, traffic: true, buses: true })
+  const [time, setTime] = useState<number | null>(null)
+  const [playing, setPlaying] = useState(false)
+  const [hoveredBus, setHoveredBus] = useState<number | null>(null)
+
+  useEffect(() => {
+    getRail()
+      .then((r) => setRail(r.data))
+      .catch(() => setPickHint('Rail lines unavailable — is the backend running?'))
+  }, [])
+
+  const derived = useMemo(() => (result ? derive(result) : null), [result])
+
+  // A new result may be shorter than the current timeline position.
+  const timeInRange = time != null && derived ? Math.min(time, derived.duration_s) : time
+
+  const onPickRelease = useCallback(
+    (lon: number, lat: number) => {
+      if (!rail) return
+      const snap = snapToRail(rail, lon, lat)
+      if (!snap || snap[2] > SNAP_MAX_M) {
+        setPickHint('Derailments happen on rail lines — click closer to a dashed rail line.')
+        return
+      }
+      setPickHint(null)
+      setParams((p) => ({ ...p, release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) }))
+    },
+    [rail, setParams],
+  )
+
+  useEffect(() => {
+    if (!pickHint || !rail) return
+    const id = window.setTimeout(() => setPickHint(null), 4000)
+    return () => window.clearTimeout(id)
+  }, [pickHint, rail])
+
+  const [srcLabel, srcTone] = SOURCE_LABEL[source] ?? ['', '']
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden>
+            <rect width="32" height="32" rx="7" fill="#151c26" />
+            <path d="M4 22c6-1 9-5 12-9s6-6 12-7" stroke="#ff8a1f" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <circle cx="16" cy="13" r="3.2" fill="#ef4444" />
+          </svg>
+          <div>
+            <div className="brand-name">Isthmus</div>
+            <div className="brand-sub">Hazmat evacuation planner · Downtown Madison</div>
+          </div>
+        </div>
+        <nav className="tabs" role="tablist">
+          {(
+            [
+              ['live', 'Live scenario'],
+              ['planning', 'Planning'],
+              ['assumptions', 'Assumptions'],
+            ] as [Tab, string][]
+          ).map(([k, label]) => (
+            <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="status">
+          {tab === 'live' && srcLabel && <span className={`badge ${srcTone}`}>{srcLabel}</span>}
+          {tab === 'live' && loading && <span className="badge"><span className="spinner sm" /> Simulating</span>}
+        </div>
+        {loading && <div className="progress" />}
+      </header>
+
+      <main className="main">
+        <div className={`view live ${tab === 'live' ? '' : 'hidden'}`}>
+          <MapView
+            result={result}
+            derived={derived}
+            rail={rail}
+            params={params}
+            toggles={toggles}
+            time={timeInRange}
+            onPickRelease={onPickRelease}
+            hoveredBus={hoveredBus}
+            setHoveredBus={setHoveredBus}
+          />
+          <ControlPanel
+            params={params}
+            update={update}
+            onRun={() => void run()}
+            onReset={() => setParams(DEFAULT_PARAMS)}
+            loading={loading}
+            autoRun={autoRun}
+            setAutoRun={setAutoRun}
+            pickHint={pickHint}
+          />
+          <div className="overlay-top">
+            <SummaryCards summary={result?.summary ?? null} loading={loading} />
+            {error && (
+              <div className="error-box" role="alert">
+                <b>Simulation failed.</b> {error}
+                <button className="ghost sm" onClick={() => void run()}>Retry</button>
+              </div>
+            )}
+          </div>
+          <Legend toggles={toggles} setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))} />
+          {derived && (
+            <Timeline
+              time={timeInRange}
+              setTime={setTime}
+              duration={derived.duration_s}
+              playing={playing}
+              setPlaying={setPlaying}
+              clearance={result?.summary.clearance_time_s ?? null}
+            />
+          )}
+        </div>
+        {tab === 'planning' && <div className="view"><PlanningTab /></div>}
+        {tab === 'assumptions' && <div className="view"><AssumptionsTab /></div>}
+      </main>
+    </div>
+  )
+}

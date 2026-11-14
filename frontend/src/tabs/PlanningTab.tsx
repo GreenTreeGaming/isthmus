@@ -1,0 +1,146 @@
+import { useEffect, useState } from 'react'
+import {
+  Bar, BarChart, CartesianGrid, LabelList, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from 'recharts'
+import { getInsights } from '../api'
+import type { Insights } from '../types'
+import { compass, fmtDuration, fmtInt, fmtPct } from '../lib/format'
+
+const SERIES = '#3987e5'
+const GRID = 'rgba(148,163,184,0.14)'
+const AXIS = { fill: '#94a3b8', fontSize: 12 }
+const TT = {
+  contentStyle: { background: '#111821', border: '1px solid #263241', borderRadius: 8, fontSize: 12.5 },
+  labelStyle: { color: '#e6edf5', fontWeight: 600 },
+  itemStyle: { color: '#c3cfdc' },
+  cursor: { fill: 'rgba(148,163,184,0.08)' },
+}
+const FACILITY_LABEL: Record<string, string> = { nursing_home: 'Nursing home', hospital: 'Hospital', dorm: 'Residence hall', stadium: 'Stadium' }
+
+function ChartCard({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
+  return (
+    <section className="chart-card">
+      <h3>{title}</h3>
+      <p className="muted">{sub}</p>
+      <div className="chart-body">{children}</div>
+    </section>
+  )
+}
+
+export function PlanningTab() {
+  const [data, setData] = useState<Insights | null>(null)
+  const [source, setSource] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getInsights()
+      .then((r) => {
+        setData(r.data)
+        setSource(r.source)
+      })
+      .catch((e: Error) => setError(e.message))
+  }, [])
+
+  if (error) return <div className="page"><div className="error-box">Could not load insights: {error}</div></div>
+  if (!data) return <div className="page"><div className="loading-box"><span className="spinner" /> Loading insights…</div></div>
+
+  const bottlenecks = [...data.top_bottlenecks].sort((a, b) => b.share - a.share).slice(0, 8)
+  const facilities = [...data.facilities_in_zone]
+    .sort((a, b) => b.share - a.share)
+    .slice(0, 8)
+    .map((f) => ({ ...f, label: `${f.name}` }))
+  const wind = [...data.worst_wind]
+    .sort((a, b) => a.wind_from_deg - b.wind_from_deg)
+    .map((w) => ({ ...w, dir: compass(w.wind_from_deg), clearance_min: Math.round(w.mean_clearance_s / 60) }))
+  const worst = [...wind].sort((a, b) => b.mean_clearance_s - a.mean_clearance_s)[0]
+  const barH = (n: number) => Math.max(220, n * 38 + 30)
+
+  return (
+    <div className="page planning">
+      <header className="page-head">
+        <div>
+          <h2>Planning insights</h2>
+          <p className="muted">
+            Recurring choke points across {data.n_scenarios ? fmtInt(data.n_scenarios) : 'many'} simulated derailments — every rail location, wind direction, time of day and chemical.
+          </p>
+        </div>
+        {source === 'placeholder' && <span className="badge warn">Placeholder data — batch results pending</span>}
+      </header>
+
+      {worst && (
+        <div className="hero-row">
+          <div className="hero">
+            <div className="card-label">Most-frequent bottleneck</div>
+            <div className="hero-value">{bottlenecks[0]?.name ?? '—'}</div>
+            <div className="muted">{bottlenecks[0] ? `${fmtPct(bottlenecks[0].share)} of scenarios` : ''}</div>
+          </div>
+          <div className="hero">
+            <div className="card-label">Worst wind direction</div>
+            <div className="hero-value">From {worst.dir}</div>
+            <div className="muted">{fmtDuration(worst.mean_clearance_s)} average clearance</div>
+          </div>
+          <div className="hero">
+            <div className="card-label">Facility most often inside the zone</div>
+            <div className="hero-value">{facilities[0]?.name ?? '—'}</div>
+            <div className="muted">{facilities[0] ? `${fmtPct(facilities[0].share)} of scenarios` : ''}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="chart-grid">
+        <ChartCard title="Top bottleneck roads" sub="Share of scenarios where the road segment is in the network's minimum cut">
+          <ResponsiveContainer width="100%" height={barH(bottlenecks.length)}>
+            <BarChart data={bottlenecks} layout="vertical" margin={{ left: 8, right: 48, top: 4, bottom: 4 }} barCategoryGap={8}>
+              <CartesianGrid horizontal={false} stroke={GRID} />
+              <XAxis type="number" domain={[0, 1]} tickFormatter={fmtPct} tick={AXIS} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={170} tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <Tooltip {...TT} formatter={(v: number, _n, p) => [`${fmtPct(v)} (${fmtInt(p.payload.times_bottleneck)} runs)`, 'Bottleneck in']} />
+              <Bar dataKey="share" fill={SERIES} radius={[0, 4, 4, 0]} maxBarSize={22}>
+                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill="#c3cfdc" fontSize={12} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Facilities most often inside the zone" sub="Share of scenarios where the facility falls in the isolation or protective zone">
+          <ResponsiveContainer width="100%" height={barH(facilities.length)}>
+            <BarChart data={facilities} layout="vertical" margin={{ left: 8, right: 48, top: 4, bottom: 4 }} barCategoryGap={8}>
+              <CartesianGrid horizontal={false} stroke={GRID} />
+              <XAxis type="number" domain={[0, 1]} tickFormatter={fmtPct} tick={AXIS} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={190} tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <Tooltip {...TT} formatter={(v: number, _n, p) => [fmtPct(v), FACILITY_LABEL[p.payload.type] ?? p.payload.type]} />
+              <Bar dataKey="share" fill={SERIES} radius={[0, 4, 4, 0]} maxBarSize={22}>
+                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill="#c3cfdc" fontSize={12} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Clearance time by wind direction" sub="Average minutes until the last evacuating vehicle is out, by where the wind comes from">
+          <ResponsiveContainer width="100%" height={320}>
+            <RadarChart data={wind} outerRadius="72%">
+              <PolarGrid stroke={GRID} />
+              <PolarAngleAxis dataKey="dir" tick={{ ...AXIS, fill: '#d6dee8', fontSize: 13 }} />
+              <PolarRadiusAxis angle={90} tick={{ ...AXIS, fontSize: 10 }} axisLine={false} tickFormatter={(v: number) => `${v}m`} />
+              <Tooltip {...TT} formatter={(v: number) => [`${v} min`, 'Avg. clearance']} labelFormatter={(l) => `Wind from ${l}`} />
+              <Radar dataKey="clearance_min" stroke={SERIES} strokeWidth={2} fill={SERIES} fillOpacity={0.28} dot={{ r: 3, fill: SERIES }} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard title="Residents left waiting for a bus, by wind direction" sub="Average people needing a bus who are not picked up before the plume arrives">
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={wind} margin={{ left: 0, right: 12, top: 20, bottom: 4 }} barCategoryGap="22%">
+              <CartesianGrid vertical={false} stroke={GRID} />
+              <XAxis dataKey="dir" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <YAxis tick={AXIS} axisLine={false} tickLine={false} width={40} />
+              <Tooltip {...TT} formatter={(v: number) => [fmtInt(v), 'Avg. unserved']} labelFormatter={(l) => `Wind from ${l}`} />
+              <Bar dataKey="mean_unserved" fill={SERIES} radius={[4, 4, 0, 0]} maxBarSize={36} />
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      </div>
+    </div>
+  )
+}

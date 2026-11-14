@@ -1,0 +1,110 @@
+{
+ "type": "FeatureCollection",
+ "_comment": "PLACEHOLDER: approximate downtown Madison rail corridors, hand-traced. Replaced by data/silver/rail_lines.parquet when it exists.",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "rail_id": 1,
+    "name": "Isthmus corridor (approx.)"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -89.318,
+      43.0975
+     ],
+     [
+      -89.33,
+      43.0925
+     ],
+     [
+      -89.345,
+      43.087
+     ],
+     [
+      -89.36,
+      43.081
+     ],
+     [
+      -89.372,
+      43.076
+     ],
+     [
+      -89.378,
+      43.0728
+     ],
+     [
+      -89.386,
+      43.07
+     ],
+     [
+      -89.394,
+      43.066
+     ],
+     [
+      -89.399,
+      43.061
+     ],
+     [
+      -89.405,
+      43.056
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "rail_id": 2,
+    "name": "West spur (approx.)"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -89.394,
+      43.066
+     ],
+     [
+      -89.405,
+      43.068
+     ],
+     [
+      -89.418,
+      43.069
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "rail_id": 3,
+    "name": "North spur (approx.)"
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -89.36,
+      43.081
+     ],
+     [
+      -89.357,
+      43.091
+     ],
+     [
+      -89.352,
+      43.102
+     ],
+     [
+      -89.348,
+      43.112
+     ]
+    ]
+   }
+  }
+ ]
+}
