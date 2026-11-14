@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAssumptions, getBlockFrequency, getBlocks, getRail, simulate } from './api'
 import { ControlPanel } from './components/ControlPanel'
 import { DemoBar } from './components/DemoBar'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { Toasts, type ToastMsg } from './components/Toast'
 import { InfoCard, type Selection } from './components/InfoCard'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
@@ -40,6 +42,10 @@ export default function App() {
   const [playing, setPlaying] = useState(false)
   const [hoveredBus, setHoveredBus] = useState<number | null>(null)
 
+  // Errors surface as toasts; the map and last good result stay on screen.
+  const [staticError, setStaticError] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+  const dismiss = useCallback((id: string) => setDismissed((d) => new Set(d).add(id)), [])
   const [selection, setSelection] = useState<Selection | null>(null)
   const [timing, setTiming] = useState<WaveTiming>(DEFAULT_TIMING)
   const [blockGeo, setBlockGeo] = useState<BlockGeoCollection | null>(null)
@@ -57,10 +63,13 @@ export default function App() {
           return snap && snap[2] > 1 ? { ...p, release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) } : p
         })
       })
-      .catch(() => setPickHint('Rail lines unavailable — is the backend running?'))
+      .catch((e: Error) => {
+        setPickHint('Rail lines unavailable — is the backend running?')
+        setStaticError(`Could not load map data (${e.message}).`)
+      })
     getBlocks()
       .then((r) => setBlockGeo(r.data))
-      .catch(() => undefined) // surfaced via the simulate error banner
+      .catch((e: Error) => setStaticError(`Could not load census block outlines (${e.message}).`))
     getAssumptions()
       .then((r) => {
         const items = r.data.groups.flatMap((g) => g.items)
@@ -149,6 +158,13 @@ export default function App() {
   const railName = useMemo(() => (rail ? nearestRailName(rail, params.release_lon, params.release_lat) : null), [rail, params.release_lon, params.release_lat])
   const place = nearLandmark(params.release_lon, params.release_lat)
 
+  const toasts = useMemo(() => {
+    const out: ToastMsg[] = []
+    if (error) out.push({ id: `sim:${error}`, title: 'Simulation failed', detail: error, action: { label: 'Retry', run: () => void run() } })
+    if (staticError) out.push({ id: `static:${staticError}`, title: 'Backend unavailable', detail: `${staticError} Start it with: uvicorn backend.main:app --port 8000`, action: { label: 'Reload', run: () => window.location.reload() } })
+    return out.filter((t) => !dismissed.has(t.id))
+  }, [error, staticError, dismissed, run])
+
   const [srcLabel, srcTone] = SOURCE_LABEL[source] ?? ['', '']
 
   return (
@@ -190,6 +206,7 @@ export default function App() {
 
       <main className="main">
         <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''} ${demo != null ? 'demo-mode' : ''}`}>
+          <ErrorBoundary label="map">
           <MapView
             result={result}
             derived={derived}
@@ -207,6 +224,7 @@ export default function App() {
             onSelect={setSelection}
             fitTo={fitFor?.zones ?? null}
           />
+          </ErrorBoundary>
           {loading && (
             <div className="sim-overlay" role="status" aria-live="polite">
               <span className="spinner" /> Simulating scenario…
@@ -242,12 +260,6 @@ export default function App() {
               )}
             </ScenarioStrip>
             <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} />
-            {error && (
-              <div className="error-box" role="alert">
-                <b>Simulation failed.</b> {error}
-                <button className="ghost sm" onClick={() => void run()}>Retry</button>
-              </div>
-            )}
           </div>
           {selection && result && (
             <InfoCard
@@ -280,6 +292,7 @@ export default function App() {
         </div>
         {tab === 'planning' && (
           <div className="view">
+            <ErrorBoundary label="planning view">
             <PlanningTab
               frequencyReady={frequency != null}
               onShowFrequency={() => {
@@ -288,10 +301,12 @@ export default function App() {
                 setTab('live')
               }}
             />
+            </ErrorBoundary>
           </div>
         )}
-        {tab === 'assumptions' && <div className="view"><AssumptionsTab /></div>}
+        {tab === 'assumptions' && <div className="view"><ErrorBoundary label="assumptions view"><AssumptionsTab /></ErrorBoundary></div>}
       </main>
+      <Toasts toasts={toasts} dismiss={dismiss} />
     </div>
   )
 }

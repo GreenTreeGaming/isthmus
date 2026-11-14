@@ -51,7 +51,7 @@ function Skeleton() {
 }
 
 export function SummaryCards({ summary: s, loading, pinned }: Props) {
-  if (!s) return loading ? <Skeleton /> : null
+  if (!s) return <Skeleton />
   const b = pinned?.summary ?? null
   const served = s.need_bus_total - s.need_bus_unserved
   const servedPct = s.need_bus_total > 0 ? served / s.need_bus_total : 1
