@@ -119,6 +119,10 @@ export default function App() {
     setPinned(null)
   }, [])
 
+  // In the demo, fly the camera to each step's zone once its result lands.
+  const [fitFor, setFitFor] = useState<typeof result>(null)
+  if (demo != null && result && !loading && result !== fitFor) setFitFor(result)
+
   const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
 
   // A new result may be shorter than the current timeline position.
@@ -185,7 +189,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''}`}>
+        <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''} ${demo != null ? 'demo-mode' : ''}`}>
           <MapView
             result={result}
             derived={derived}
@@ -201,6 +205,7 @@ export default function App() {
             frequencyMax={frequency?.max ?? 1}
             selection={selection}
             onSelect={setSelection}
+            fitTo={fitFor?.zones ?? null}
           />
           {loading && (
             <div className="sim-overlay" role="status" aria-live="polite">
@@ -223,7 +228,7 @@ export default function App() {
             <ScenarioStrip params={params} railName={railName} place={place}>
               {pinned ? (
                 <button className="chip pinned" onClick={() => setPinned(null)} title="Stop comparing">
-                  Comparing with: {pinned.label} <span aria-hidden>✕</span>
+                  vs. {pinned.label} <span aria-hidden>✕</span>
                 </button>
               ) : (
                 <button

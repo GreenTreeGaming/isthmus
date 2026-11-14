@@ -28,22 +28,26 @@ export function DemoBar({ steps, index, onGo, onExit, loading }: Props) {
   }, [index, last, onGo, onExit])
 
   return (
-    <div className="panel demo-bar" role="dialog" aria-label="Guided demo">
-      <div className="demo-steps" aria-hidden>
+    <aside className="panel demo-panel" role="dialog" aria-label="Guided demo">
+      <div className="demo-top">
+        <span className="demo-count">Guided demo · {index + 1} / {steps.length}</span>
+        <button className="icon-btn" onClick={onExit} aria-label="Exit demo (Esc)" title="Exit demo (Esc)">
+          ✕
+        </button>
+      </div>
+      <div className="demo-steps">
         {steps.map((s, i) => (
-          <button key={s.title} className={i === index ? 'on' : i < index ? 'done' : ''} onClick={() => onGo(i)} title={s.title}>
-            {i + 1}
+          <button key={s.title} className={i === index ? 'on' : i < index ? 'done' : ''} onClick={() => onGo(i)} title={s.title} aria-label={`Step ${i + 1}: ${s.title}`}>
+            <b>{i + 1}</b>
           </button>
         ))}
       </div>
-      <div className="demo-text">
-        <div className="demo-title">
-          <span className="demo-count">Step {index + 1} of {steps.length}</span>
-          {step.title}
-          {loading && <span className="spinner sm" />}
-        </div>
-        <p>{step.caption}</p>
-      </div>
+      <h2 className="demo-title">
+        {step.title}
+        {loading && <span className="spinner sm" />}
+      </h2>
+      <p className="demo-caption">{step.caption}</p>
+      {step.compareLabel && <p className="demo-compare">Cards show the change from: <b>{step.compareLabel}</b></p>}
       <div className="demo-actions">
         <button className="ghost" onClick={() => onGo(index - 1)} disabled={index === 0}>
           ← Back
@@ -51,10 +55,8 @@ export function DemoBar({ steps, index, onGo, onExit, loading }: Props) {
         <button className="run" onClick={() => (last ? onExit() : onGo(index + 1))}>
           {last ? 'Finish' : 'Next →'}
         </button>
-        <button className="icon-btn" onClick={onExit} aria-label="Exit demo (Esc)" title="Exit demo (Esc)">
-          ✕
-        </button>
       </div>
-    </div>
+      <div className="demo-keys">← → to step · Esc to exit</div>
+    </aside>
   )
 }

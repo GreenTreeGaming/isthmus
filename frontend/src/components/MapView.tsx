@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DeckGL, { type DeckGLRef } from '@deck.gl/react'
-import type { PickingInfo } from '@deck.gl/core'
-import { GeoJsonLayer, PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
+import { FlyToInterpolator, WebMercatorViewport, type PickingInfo } from '@deck.gl/core'
+import { GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from '@deck.gl/layers'
 import { HeatmapLayer } from '@deck.gl/aggregation-layers'
 import { PathStyleExtension, type PathStyleExtensionProps } from '@deck.gl/extensions'
 import { Map } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '../lib/maplibreWorker'
+import type { FeatureCollection, Polygon } from 'geojson'
 import type { BlockFeature, BlockFrequency, BlockGeoCollection, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse } from '../types'
 import { COLORS, blockColor, frequencyColor, loadColor } from '../lib/colors'
 import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
@@ -42,6 +43,43 @@ interface Props {
   frequencyMax: number
   selection: Selection | null
   onSelect: (s: Selection | null) => void
+  /** When this changes the camera flies to fit these zones (used by the guided demo). */
+  fitTo: ScenarioResponse['zones'] | null
+}
+
+type Zones = ScenarioResponse['zones']
+const WORLD: [number, number][] = [[-180, -85], [180, -85], [180, 85], [-180, 85]]
+
+function zonesBBox(z: Zones): [[number, number], [number, number]] | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  for (const f of z.features) for (const ring of f.geometry.coordinates) for (const [x, y] of ring) {
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y)
+  }
+  return isFinite(x0) ? [[x0, y0], [x1, y1]] : null
+}
+
+function fitView(z: Zones | null) {
+  const bb = z && zonesBBox(z)
+  if (!bb) return INITIAL_VIEW
+  const width = window.innerWidth
+  const height = Math.max(300, window.innerHeight - 56)
+  const panel = width > 1700 ? 330 : width > 1280 ? 300 : 272
+  try {
+    const v = new WebMercatorViewport({ width, height }).fitBounds(bb, {
+      padding: { left: panel + 40, right: Math.min(280, width * 0.2), top: Math.min(230, height * 0.33), bottom: Math.min(220, height * 0.32) },
+      maxZoom: 15,
+    })
+    return { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom, pitch: 0, bearing: 0, transitionDuration: 1400, transitionInterpolator: new FlyToInterpolator() }
+  } catch {
+    return INITIAL_VIEW
+  }
+}
+
+/** Dim everything outside the protective-action zone so the affected area stands out. */
+function dimOutside(z: Zones | null): FeatureCollection<Polygon> | null {
+  const protect = z?.features.find((f) => f.properties.kind === 'protect')
+  if (!protect) return null
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, protect.geometry.coordinates[0]] } }] }
 }
 
 interface Particle {
@@ -50,7 +88,8 @@ interface Particle {
   edge: EdgeFeature
 }
 
-export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect }: Props) {
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo }: Props) {
+  const initialViewState = useMemo(() => fitView(fitTo), [fitTo])
   // A clicked bus stays highlighted like a hovered one.
   const hoveredBus = hoverBus ?? (selection?.kind === 'bus' ? selection.id : null)
   const selectedBlock = selection?.kind === 'block' ? selection.id : null
@@ -68,6 +107,29 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
     raf.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf.current)
   }, [])
+
+  // Crossfade the hazard zones when they change (e.g. the wind turns) instead of snapping.
+  const zonesNow = result?.zones ?? null
+  const [zoneHist, setZoneHist] = useState<{ cur: Zones | null; prev: Zones | null; at: number }>({ cur: zonesNow, prev: null, at: 0 })
+  if (zonesNow !== zoneHist.cur) setZoneHist({ cur: zonesNow, prev: zoneHist.cur, at: phase })
+  const zoneFade = Math.min(1, Math.max(0, (phase - zoneHist.at) / 0.8))
+  const dim = useMemo(() => dimOutside(zonesNow), [zonesNow])
+
+  // The three most-loaded bottleneck roads get a name label.
+  const bottleneckLabels = useMemo(() => {
+    if (!result) return []
+    const seen = new Set<string>()
+    const out: { position: [number, number]; text: string }[] = []
+    const sorted = result.edges.features.filter((f) => f.properties.is_bottleneck && f.properties.name).sort((a, b) => b.properties.peak_load_ratio - a.properties.peak_load_ratio)
+    for (const f of sorted) {
+      const name = f.properties.name!
+      if (seen.has(name)) continue
+      seen.add(name)
+      out.push({ position: along(f.geometry.coordinates as [number, number][], 0.5), text: name })
+      if (out.length === 3) break
+    }
+    return out
+  }, [result])
 
   const edgeLoadNow = useMemo(() => {
     const m = new globalThis.Map<number, number>()
@@ -116,7 +178,33 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
   const pulse = (phase % 2) / 2
   const releasePos: [number, number] = [params.release_lon, params.release_lat]
 
+  const glow = 0.5 + 0.5 * Math.sin(phase * 3)
+  const zoneLayer = (id: string, zones: Zones, opacity: number) =>
+    new GeoJsonLayer({
+      id,
+      data: zones,
+      opacity,
+      filled: true,
+      stroked: true,
+      getFillColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 85 : 38],
+      getLineColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 255 : 200],
+      getLineWidth: 2,
+      lineWidthUnits: 'pixels',
+      getDashArray: (f: { properties: { kind: string } }) => ((f.properties as { kind: string }).kind === 'protect' ? [6, 4] : [0, 0]),
+      dashJustified: true,
+      extensions: [new PathStyleExtension({ dash: true })],
+      pickable: id === 'zones',
+    })
+
   const layers = [
+    dim &&
+      new SolidPolygonLayer({
+        id: 'dim-outside',
+        data: dim.features,
+        getPolygon: (f) => f.geometry.coordinates,
+        getFillColor: [3, 5, 9, 120],
+        opacity: zoneFade,
+      }),
     toggles.heatmap &&
       derived &&
       new HeatmapLayer({
@@ -177,29 +265,17 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         lineWidthMinPixels: 0.5,
         pickable: true,
       }),
-    result &&
-      new GeoJsonLayer({
-        id: 'zones',
-        data: result.zones,
-        filled: true,
-        stroked: true,
-        getFillColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 85 : 38],
-        getLineColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 255 : 200],
-        getLineWidth: 2,
-        lineWidthUnits: 'pixels',
-        getDashArray: (f: { properties: { kind: string } }) => ((f.properties as { kind: string }).kind === 'protect' ? [6, 4] : [0, 0]),
-        dashJustified: true,
-        extensions: [new PathStyleExtension({ dash: true })],
-        pickable: true,
-      }),
+    zoneHist.prev && zoneFade < 1 && zoneLayer('zones-prev', zoneHist.prev, 1 - zoneFade),
+    result && zoneLayer('zones', result.zones, zoneFade),
     toggles.roads &&
       result &&
       new PathLayer<EdgeFeature>({
         id: 'edges-glow',
         data: result.edges.features.filter((f) => f.properties.is_bottleneck),
         getPath: (f) => f.geometry.coordinates as [number, number][],
-        getColor: [255, 70, 70, 70],
-        getWidth: 22,
+        getColor: [255, 70, 70, Math.round(60 + 60 * glow)],
+        getWidth: 20 + 8 * glow,
+        updateTriggers: { getColor: [glow], getWidth: [glow] },
         widthUnits: 'pixels',
         capRounded: true,
         jointRounded: true,
@@ -211,7 +287,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         data: result.edges.features,
         getPath: (f) => f.geometry.coordinates as [number, number][],
         getColor: (f) => loadColor(edgeLoadNow.get(f.properties.edge_id) ?? 0),
-        getWidth: (f) => (f.properties.is_bottleneck ? 8 : 3.5),
+        getWidth: (f) => (f.properties.is_bottleneck ? 10 : 3.5),
         widthUnits: 'pixels',
         widthMinPixels: 2,
         capRounded: true,
@@ -333,6 +409,24 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       stroked: true,
       lineWidthMinPixels: 4,
     }),
+    toggles.roads &&
+      new TextLayer({
+        id: 'bottleneck-labels',
+        data: bottleneckLabels,
+        getPosition: (d) => d.position,
+        getText: (d) => d.text,
+        getSize: 14,
+        getColor: [255, 255, 255, 255],
+        getPixelOffset: [0, -22],
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontWeight: 700,
+        characterSet: 'auto',
+        background: true,
+        getBackgroundColor: [150, 20, 20, 235],
+        getBorderColor: [255, 120, 120, 255],
+        getBorderWidth: 1,
+        backgroundPadding: [7, 4, 7, 4],
+      }),
   ].filter(Boolean)
 
   const onHover = (info: PickingInfo) => {
@@ -389,7 +483,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
     <div className="map-wrap" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
       <DeckGL
         ref={deckRef}
-        initialViewState={INITIAL_VIEW}
+        initialViewState={initialViewState}
         controller={{ dragRotate: false }}
         layers={layers}
         onHover={onHover}

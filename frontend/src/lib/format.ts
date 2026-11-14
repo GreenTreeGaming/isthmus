@@ -16,15 +16,10 @@ export function fmtDuration(s: number | null | undefined): string {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`
 }
 
-/** Elapsed sim time as T+mm:ss / T+h:mm:ss */
+/** Elapsed time since the alert: "T+12 min" (or "T+1h 05m"). */
 export function fmtClock(s: number): string {
-  const t = Math.max(0, Math.round(s))
-  const h = Math.floor(t / 3600)
-  const m = Math.floor((t % 3600) / 60)
-  const sec = t % 60
-  const mm = String(m).padStart(2, '0')
-  const ss = String(sec).padStart(2, '0')
-  return h ? `T+${h}:${mm}:${ss}` : `T+${mm}:${ss}`
+  const m = Math.max(0, Math.round(s / 60))
+  return m < 60 ? `T+${m} min` : `T+${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`
 }
 
 export const fmtPct = (x: number) => `${Math.round(x * 100)}%`
