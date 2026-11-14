@@ -36,9 +36,12 @@ class SimResult:
 
 
 def simulate(cap_vph: np.ndarray, tt_s: np.ndarray, groups: list[Group],
-             step_s: float = A.SIM_STEP_S, release_window_s: float = A.WAVE_INTERVAL_S,
-             delay_window: tuple[float, float] = (A.BUS_DISPATCH_DELAY_S, A.BUS_DISPATCH_DELAY_S + 3600),
-             max_s: float = A.MAX_SIM_S) -> SimResult:
+             step_s: float | None = None, release_window_s: float | None = None,
+             delay_window: tuple[float, float] | None = None, max_s: float | None = None) -> SimResult:
+    step_s = step_s or A.SIM_STEP_S
+    release_window_s = release_window_s or A.WAVE_INTERVAL_S
+    delay_window = delay_window or (A.BUS_DISPATCH_DELAY_S, A.BUS_DISPATCH_DELAY_S + 3600)
+    max_s = max_s or A.MAX_SIM_S
     m = len(cap_vph)
     cap_step = cap_vph * step_s / 3600.0
     queues: list[deque] = [deque() for _ in range(m)]

@@ -51,6 +51,7 @@ CONTRAFLOW_CLASSES: frozenset[str] = frozenset(
 # --------------------------------------------------------------------------- people
 WALK_SPEED_MPS = 1.2              # typical pedestrian
 WALK_SPEED_65_MPS = 0.8           # older residents
+WALK_DETOUR_FACTOR = 1.3          # street distance ÷ straight-line distance
 VEHICLES_PER_HOUSEHOLD = 1.0      # cars actually taken per car-owning household
 DEFAULT_HOUSEHOLD_SIZE = 2.2      # used when households are missing
 VISITOR_DRIVE_SHARE = 0.6         # daytime workers / game-day fans who drove in
@@ -95,6 +96,7 @@ STOP_FIXED_S = 60                 # dwell per pickup stop
 BOARDING_S_PER_PERSON = 6         # mobility-limited riders, per person
 NURSING_BOARDING_S_PER_PERSON = 30
 BUS_ZONE_COST_MULT = 3.0          # buses avoid driving inside the zone unless picking up
+MAX_STOP_WALK_M = 400             # farther than this from a Metro stop → pick up at the block itself
 BUS_SOLVER_TIME_LIMIT_S = 1.0     # OR-Tools search budget
 UNSERVED_PENALTY_PER_PERSON = 100_000
 

@@ -12,8 +12,9 @@ from engine import assumptions as A
 OUTSIDE, SHELTER, EVACUATE = "outside", "shelter", "evacuate"
 
 
-def estimate_exit_s(ff_to_exit_s: np.ndarray, depart_s: np.ndarray | float = A.MOBILIZATION_S) -> np.ndarray:
+def estimate_exit_s(ff_to_exit_s: np.ndarray, depart_s: np.ndarray | float | None = None) -> np.ndarray:
     """Expected time to reach safety = departure + free-flow time × congestion factor."""
+    depart_s = A.MOBILIZATION_S if depart_s is None else depart_s
     return np.asarray(depart_s, float) + np.asarray(ff_to_exit_s, float) * A.CONGESTION_FACTOR
 
 

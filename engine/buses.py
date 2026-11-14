@@ -28,7 +28,11 @@ class Stop:
     node_id: int
     people: int
     deadline_s: float
-    board_s_per_person: float = A.BOARDING_S_PER_PERSON
+    board_s_per_person: float | None = None
+
+    def __post_init__(self):
+        if self.board_s_per_person is None:
+            self.board_s_per_person = A.BOARDING_S_PER_PERSON
 
 
 @dataclass
@@ -63,8 +67,10 @@ def _paths_between(G: nx.DiGraph, keys: list[int], cost, time) -> tuple[list[lis
 
 def plan_buses(G: nx.DiGraph, edge_time_s: dict[int, float], zone_edge_ids: set[int], closed_edge_ids: set[int],
                garage: tuple[str, int], shelter: tuple[str, int], stops: list[Stop],
-               bus_count: int, bus_capacity: int, dispatch_s: float = A.BUS_DISPATCH_DELAY_S,
-               time_limit_s: float = A.BUS_SOLVER_TIME_LIMIT_S) -> BusPlan:
+               bus_count: int, bus_capacity: int, dispatch_s: float | None = None,
+               time_limit_s: float | None = None) -> BusPlan:
+    dispatch_s = A.BUS_DISPATCH_DELAY_S if dispatch_s is None else dispatch_s
+    time_limit_s = A.BUS_SOLVER_TIME_LIMIT_S if time_limit_s is None else time_limit_s
     total = float(sum(s.people for s in stops))
     if not stops or bus_count <= 0 or bus_capacity <= 0:
         return BusPlan([], 0.0, total)
