@@ -139,5 +139,30 @@
    "mean_unserved": 40,
    "n": 60
   }
+ ],
+ "n_failed": 0,
+ "median_runtime_ms": 1650.0,
+ "by_time_of_day": [
+  {
+   "time_of_day": "night",
+   "mean_clearance_s": 6120.0,
+   "mean_evacuating": 21400.0,
+   "mean_sheltering": 5200.0,
+   "mean_unserved": 48.0
+  },
+  {
+   "time_of_day": "day",
+   "mean_clearance_s": 7480.0,
+   "mean_evacuating": 30800.0,
+   "mean_sheltering": 6900.0,
+   "mean_unserved": 61.0
+  },
+  {
+   "time_of_day": "gameday",
+   "mean_clearance_s": 10350.0,
+   "mean_evacuating": 52300.0,
+   "mean_sheltering": 9100.0,
+   "mean_unserved": 85.0
+  }
  ]
 }
