@@ -86,6 +86,11 @@ def test_sim_close_to_flow_plan(result):
     assert d.sim_clearance_s < 4 * d.flow_clearance_s + A.MOBILIZATION_S + 3 * A.WAVE_INTERVAL_S
 
 
+def test_sim_clearance_in_summary(result):
+    r, d = result
+    assert r.summary.sim_clearance_s == d.sim_clearance_s > 0
+
+
 def test_runtime_under_5s(result):
     r, _ = result
     assert r.summary.runtime_ms < 5000

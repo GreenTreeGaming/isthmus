@@ -154,6 +154,7 @@ def run_with_diagnostics(params: ScenarioParams, net: Network) -> tuple[Scenario
         need_bus_unserved=float(bus_plan.unserved),
         bottleneck_edge_ids=[int(eg.edge_id[a]) for a in flow.bottleneck_arcs],
         runtime_ms=round(runtime_ms, 1),
+        sim_clearance_s=float(sim.clearance_s),
     )
     result = ScenarioResult(params=params, isolation_zone_wkt=iso_wkt, protect_zone_wkt=prot_wkt,
                             blocks=blocks_out, edges=edges_out, buses=bus_plan.routes, summary=summary,

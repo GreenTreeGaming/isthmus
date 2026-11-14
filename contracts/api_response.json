@@ -21,7 +21,8 @@
     "need_bus_total": 940,
     "need_bus_unserved": 60,
     "bottleneck_edge_ids": [101, 102],
-    "runtime_ms": 2140
+    "runtime_ms": 2140,
+    "sim_clearance_s": 9900
   },
   "zones": {
     "type": "FeatureCollection",

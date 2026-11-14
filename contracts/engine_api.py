@@ -73,6 +73,8 @@ class Summary:
     need_bus_unserved: float              # not picked up before plume arrival
     bottleneck_edge_ids: list[int]
     runtime_ms: float
+    sim_clearance_s: float = 0.0          # traffic sim: alert → last car out (includes mobilization + waves).
+                                          # clearance_time_s above is the flow plan's driving time only.
 
 
 @dataclass
