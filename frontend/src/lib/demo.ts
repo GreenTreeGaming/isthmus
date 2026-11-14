@@ -42,7 +42,7 @@ export const DEMO_STEPS: DemoStep[] = [
   {
     title: 'Game day',
     caption:
-      'Wind from the east carries the gas toward Camp Randall. On a game day about 75,000 extra people are nearby, and almost all of them have to shelter in place.',
+      'Wind from the east carries the gas toward Camp Randall. On a game day about 75,000 extra people are nearby, and most of them have to shelter in place.',
     params: { ...BASE, wind_from_deg: 90, time_of_day: 'gameday' },
     compareTo: { ...BASE, wind_from_deg: 90 },
     compareLabel: 'Same wind, normal day',

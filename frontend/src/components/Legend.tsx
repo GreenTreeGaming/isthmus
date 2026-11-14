@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { COLORS, FREQUENCY_GRADIENT_CSS, LOAD_GRADIENT_CSS, rgb } from '../lib/colors'
 import type { LayerToggles } from './MapView'
 
@@ -18,6 +19,8 @@ const LAYERS: [keyof LayerToggles, string][] = [
 ]
 
 export function Legend({ toggles, setToggle, frequencyMax, hidden }: Props) {
+  // On short (projector) screens the layer switches start folded so the legend never covers the cards.
+  const [layersOpen, setLayersOpen] = useState(() => window.innerHeight >= 900)
   return (
     <div className={`panel legend ${hidden ? 'hidden' : ''}`}>
       <div className="legend-group">
@@ -34,9 +37,9 @@ export function Legend({ toggles, setToggle, frequencyMax, hidden }: Props) {
       <div className="legend-group">
         <div className="legend-label">Road load vs. capacity</div>
         <div className="gradient" style={{ background: LOAD_GRADIENT_CSS }} />
-        <div className="gradient-scale"><span>0%</span><span>100%</span><span>140%+</span></div>
-        <div className="legend-item"><i className="line glow" />Bottleneck</div>
-        <div className="legend-item"><i className="line bus" />Bus route (hover for deadlines)</div>
+        <div className="gradient-scale"><span>free</span><span>at capacity</span><span>over</span></div>
+        <div className="legend-item"><i className="line glow" />Bottleneck (thick, dashed)</div>
+        <div className="legend-item"><i className="line bus" />Bus route (click for stops)</div>
         <div className="legend-item"><i className="stop late" />Pickup after plume arrives</div>
       </div>
       {toggles.frequency && frequencyMax != null && (
@@ -47,7 +50,10 @@ export function Legend({ toggles, setToggle, frequencyMax, hidden }: Props) {
         </div>
       )}
       <div className="legend-group layers">
-        {LAYERS.map(([k, label]) => (
+        <button className="legend-fold" onClick={() => setLayersOpen((o) => !o)} aria-expanded={layersOpen}>
+          Map layers <span aria-hidden>{layersOpen ? '▾' : '▸'}</span>
+        </button>
+        {layersOpen && LAYERS.map(([k, label]) => (
           <label
             key={k}
             className={`toggle compact ${k === 'frequency' && frequencyMax == null ? 'disabled' : ''}`}

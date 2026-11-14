@@ -27,13 +27,15 @@ export function blockColor(p: BlockProps, alpha = 150): RGBA {
   return [...COLORS.outside, Math.round(alpha * 0.28)]
 }
 
-// Road load: green (free) -> yellow (at capacity) -> red (over capacity).
+// Road load, colorblind-safe: slate (free) -> pale yellow -> amber (at capacity) -> orange -> crimson (over).
+// Runs along the blue-yellow axis and darkens toward red, so it never relies on telling red from green.
+// Bottlenecks are also drawn thicker with a white dashed center line.
 const STOPS: [number, [number, number, number]][] = [
-  [0.0, [46, 204, 113]],
-  [0.6, [163, 214, 64]],
-  [0.9, [250, 204, 21]],
-  [1.15, [249, 115, 22]],
-  [1.4, [239, 50, 50]],
+  [0.0, [104, 124, 150]],
+  [0.6, [230, 222, 140]],
+  [0.9, [250, 190, 40]],
+  [1.15, [240, 110, 30]],
+  [1.4, [196, 30, 60]],
 ]
 
 export function loadColor(ratio: number, alpha = 235): RGBA {

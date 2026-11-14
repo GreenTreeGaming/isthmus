@@ -9,7 +9,7 @@ import { compass, fmtDuration, fmtInt, fmtPct } from '../lib/format'
 
 const SERIES = '#3987e5'
 const GRID = 'rgba(148,163,184,0.14)'
-const AXIS = { fill: '#94a3b8', fontSize: 12 }
+const AXIS = { fill: '#a9b6c6', fontSize: 13.5 }
 const TT = {
   contentStyle: { background: '#111821', border: '1px solid #263241', borderRadius: 8, fontSize: 12.5 },
   labelStyle: { color: '#e6edf5', fontWeight: 600 },

@@ -296,6 +296,19 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         updateTriggers: { getColor: [edgeLoadNow] },
         transitions: { getColor: 250 },
       }),
+    toggles.roads &&
+      result &&
+      new PathLayer<EdgeFeature, PathStyleExtensionProps<EdgeFeature>>({
+        id: 'edges-bottleneck-dash',
+        data: result.edges.features.filter((f) => f.properties.is_bottleneck),
+        getPath: (f) => f.geometry.coordinates as [number, number][],
+        getColor: [255, 255, 255, 235],
+        getWidth: 3,
+        widthUnits: 'pixels',
+        getDashArray: [2, 1.6],
+        dashJustified: true,
+        extensions: [new PathStyleExtension({ dash: true })],
+      }),
     toggles.traffic &&
       new ScatterplotLayer({
         id: 'traffic',

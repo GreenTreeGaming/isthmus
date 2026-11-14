@@ -119,9 +119,9 @@ export default function App() {
     setPinned(null)
   }, [])
 
-  // In the demo, fly the camera to each step's zone once its result lands.
+  // Fit the camera to the zone on the first result, and to each demo step's zone once it lands.
   const [fitFor, setFitFor] = useState<typeof result>(null)
-  if (demo != null && result && !loading && result !== fitFor) setFitFor(result)
+  if (result && !loading && result !== fitFor && (demo != null || fitFor == null)) setFitFor(result)
 
   const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
 
