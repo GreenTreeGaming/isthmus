@@ -94,6 +94,111 @@ def cached_census_blocks() -> gpd.GeoDataFrame:
     return g
 
 
+def census_key() -> str | None:
+    """CENSUS_API_KEY from the environment or the repo's git-ignored .env file."""
+    import os
+    if os.environ.get("CENSUS_API_KEY"):
+        return os.environ["CENSUS_API_KEY"].strip()
+    env = REPO / ".env"
+    if env.exists():
+        for line in env.read_text().splitlines():
+            if line.strip().startswith("CENSUS_API_KEY="):
+                return line.split("=", 1)[1].strip().strip("'\"") or None
+    return None
+
+
+MAX_DAY_DENSITY_PER_KM2 = 100_000      # dense office district; above the 99th percentile of Madison blocks
+
+
+def lodes_day_population(block_ids: pd.Series, pop_night: pd.Series, area_km2: pd.Series) -> pd.Series:
+    """LEHD LODES 2022: daytime = residents − employed residents (leave for work) + jobs located in the block.
+
+    Students are not workers in LODES, so campus daytime population is understated (stated limitation).
+    """
+    def load(kind: str, col: str) -> pd.Series:
+        fname = f"wi_{kind}_S000_JT00_2022.csv.gz"
+        path = CACHE / fname
+        if not path.exists():
+            print(f"downloading LODES {kind} …")
+            r = requests.get(f"https://lehd.ces.census.gov/data/lodes/LODES8/wi/{kind}/{fname}", timeout=300)
+            r.raise_for_status()
+            path.write_bytes(r.content)
+        df = pd.read_csv(path, usecols=[col, "C000"], dtype={col: str})
+        return df.set_index(col)["C000"].astype(float)
+
+    jobs = load("wac", "w_geocode")
+    workers = load("rac", "h_geocode")
+    ids = block_ids.astype(str)
+    day = pop_night.to_numpy() - ids.map(workers).fillna(0).to_numpy() + ids.map(jobs).fillna(0).to_numpy()
+    day = np.maximum(day, 0.0)
+    # LODES puts every job of some big employers at one HQ block (UW–Madison ≈ 22k jobs on one campus block,
+    # State of Wisconsin at the Capitol). Cap daytime density so one block doesn't hold a stadium's worth of cars.
+    cap = np.maximum(pop_night.to_numpy(), area_km2.to_numpy() * MAX_DAY_DENSITY_PER_KM2)
+    capped = day > cap
+    if capped.any():
+        print(f"LODES: capped {int(capped.sum())} HQ-artifact blocks, removed {int((day - cap)[capped].sum()):,} people")
+    return pd.Series(np.minimum(day, cap), index=block_ids.index)
+
+
+def cms_nursing_homes() -> pd.DataFrame:
+    """CMS Provider Data (certified nursing homes) in Madison; residents = average residents per day."""
+    path = CACHE / "cms_madison.json"
+    if path.exists():
+        rows = pd.read_json(path)
+    else:
+        print("downloading CMS nursing homes …")
+        url = "https://data.cms.gov/provider-data/api/1/datastore/query/4pq5-n9py/0"
+        p = {"conditions[0][property]": "state", "conditions[0][value]": "WI",
+             "conditions[1][property]": "citytown", "conditions[1][value]": "MADISON", "limit": 500}
+        rows = pd.DataFrame(requests.get(url, params=p, timeout=120).json().get("results", []))
+        rows.to_json(path, orient="records")
+    if rows.empty:
+        return rows
+    w, s, e, n = BBOX
+    rows["lat"] = pd.to_numeric(rows["latitude"], errors="coerce")
+    rows["lon"] = pd.to_numeric(rows["longitude"], errors="coerce")
+    rows = rows[(rows.lon >= w) & (rows.lon <= e) & (rows.lat >= s) & (rows.lat <= n)].copy()
+    res = pd.to_numeric(rows["average_number_of_residents_per_day"], errors="coerce")
+    beds = pd.to_numeric(rows["number_of_certified_beds"], errors="coerce")
+    rows["residents"] = res.fillna(beds).fillna(PLACEHOLDER_NURSING_RESIDENTS)
+    return rows.rename(columns={"provider_name": "name", "cms_certification_number_ccn": "ccn"})
+
+
+def acs_shares(key: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """ACS 2022 5-year, Dane County. Vehicles + age at block group; disability at tract (not published at BG)."""
+    path_bg, path_tr = CACHE / "acs_bg.parquet", CACHE / "acs_tract.parquet"
+    if path_bg.exists() and path_tr.exists():
+        return pd.read_parquet(path_bg), pd.read_parquet(path_tr)
+    api = "https://api.census.gov/data/2022/acs/acs5"
+
+    def get(vars_, geo, within):
+        r = requests.get(api, params={"get": ",".join(vars_), "for": geo, "in": within, "key": key}, timeout=120)
+        r.raise_for_status()
+        j = r.json()
+        df = pd.DataFrame(j[1:], columns=j[0])
+        for v in vars_:
+            df[v] = pd.to_numeric(df[v], errors="coerce").clip(lower=0)
+        return df
+
+    age = ["B01001_001E"] + [f"B01001_{i:03d}E" for i in [*range(20, 26), *range(44, 50)]]
+    veh = ["B25044_001E", "B25044_003E", "B25044_010E"]
+    print("downloading ACS block groups …")
+    bg = get(age + veh, "block group:*", "state:55 county:025 tract:*")
+    bg["bg"] = bg["state"] + bg["county"] + bg["tract"] + bg["block group"]
+    bg["age65_share"] = bg[age[1:]].sum(1) / bg["B01001_001E"].where(bg["B01001_001E"] > 0)
+    bg["zero_vehicle_share"] = (bg["B25044_003E"] + bg["B25044_010E"]) / bg["B25044_001E"].where(bg["B25044_001E"] > 0)
+    dis = ["B18101_001E"] + [f"B18101_{i:03d}E" for i in (4, 7, 10, 13, 16, 19, 23, 26, 29, 32, 35, 38)]
+    print("downloading ACS tracts (disability) …")
+    tr = get(dis, "tract:*", "state:55 county:025")
+    tr["tract"] = tr["state"] + tr["county"] + tr["tract"]
+    tr["disability_share"] = tr[dis[1:]].sum(1) / tr["B18101_001E"].where(tr["B18101_001E"] > 0)
+    bg = bg[["bg", "age65_share", "zero_vehicle_share"]]
+    tr = tr[["tract", "disability_share"]]
+    bg.to_parquet(path_bg)
+    tr.to_parquet(path_tr)
+    return bg, tr
+
+
 def first(v):
     if isinstance(v, (list, tuple, np.ndarray)):
         return v[0] if len(v) else None
@@ -180,24 +285,41 @@ def main(out_dir: str) -> None:
         "disability_share": PLACEHOLDER_DISABILITY,
         "age65_share": PLACEHOLDER_AGE65,
     }, geometry=cb.geometry.values, crs=4326).reset_index(drop=True)
+    area_km2 = blocks.to_crs(32616).area / 1e6
+    blocks["pop_day"] = lodes_day_population(blocks["block_id"], blocks["pop_night"], area_km2)
+    blocks["pop_gameday"] = blocks["pop_day"]
+    used = ["LODES daytime population"]
+
+    key = census_key()
+    if key:
+        bg, tr = acs_shares(key)
+        b = blocks["block_id"].str[:12].map(bg.set_index("bg")["zero_vehicle_share"])
+        a = blocks["block_id"].str[:12].map(bg.set_index("bg")["age65_share"])
+        dsh = blocks["block_id"].str[:11].map(tr.set_index("tract")["disability_share"])
+        blocks["zero_vehicle_share"] = b.fillna(b.median()).fillna(PLACEHOLDER_ZERO_VEHICLE).clip(0, 1)
+        blocks["age65_share"] = a.fillna(a.median()).fillna(PLACEHOLDER_AGE65).clip(0, 1)
+        blocks["disability_share"] = dsh.fillna(dsh.median()).fillna(PLACEHOLDER_DISABILITY).clip(0, 1)
+        used.append("ACS shares")
+    else:
+        print("no CENSUS_API_KEY — ACS shares stay PLACEHOLDERS")
+
     d = blocks.geometry.representative_point().distance(shapely.Point(*CAMP_RANDALL))
     near = d.nsmallest(5).index
     blocks.loc[near, "pop_gameday"] = blocks.loc[near, "pop_day"] + GAMEDAY_CROWD / len(near)
     blocks.to_parquet(out / "blocks.parquet", index=False)
 
-    # ---- facilities (OSM — replace nursing homes with CMS)
+    # ---- facilities: nursing homes from CMS (certified, real resident counts); hospitals from OSM
     rows = []
-    for kind, tags, res in (("nursing_home", {"social_facility": "nursing_home", "amenity": "nursing_home"},
-                             PLACEHOLDER_NURSING_RESIDENTS),
-                            ("hospital", {"amenity": "hospital"}, PLACEHOLDER_HOSPITAL_RESIDENTS)):
-        f = cached_features(kind, tags)
-        for i, r in f.iterrows():
-            if kind == "nursing_home" and not ((r.get("social_facility") == "nursing_home") or
-                                               (r.get("amenity") == "nursing_home")):
-                continue
-            p = r.geometry.representative_point()
-            rows.append({"facility_id": f"{kind}_{i}", "type": kind, "name": r.get("name") or kind,
-                         "node_id": 0, "residents": float(res), "lon": p.x, "lat": p.y})
+    cms = cms_nursing_homes()
+    for r in cms.itertuples():
+        rows.append({"facility_id": f"cms_{r.ccn}", "type": "nursing_home", "name": str(r.name).title(),
+                     "node_id": 0, "residents": float(r.residents), "lon": float(r.lon), "lat": float(r.lat)})
+    used.append(f"CMS nursing homes ({len(cms)} in area)")
+    hosp = cached_features("hospital", {"amenity": "hospital"})
+    for i, r in hosp.iterrows():
+        p = r.geometry.representative_point()
+        rows.append({"facility_id": f"hospital_{i}", "type": "hospital", "name": r.get("name") or "hospital",
+                     "node_id": 0, "residents": float(PLACEHOLDER_HOSPITAL_RESIDENTS), "lon": p.x, "lat": p.y})
     fac = pd.DataFrame(rows, columns=["facility_id", "type", "name", "node_id", "residents", "lon", "lat"])
     if len(fac):
         fac["node_id"] = nearest(fac["lon"], fac["lat"])
@@ -237,7 +359,9 @@ def main(out_dir: str) -> None:
           f"({int(blocks.pop_night.sum()):,} people), {len(fac)} facilities, {len(pk)} pickups, {len(rails)} rail segs")
     print(f"missing lanes {int(road_edges.lanes.isna().sum())}, missing speed {int(road_edges.speed_kph.isna().sum())}"
           f" of {len(road_edges)} edges (engine fills by road class)")
-    print("PLACEHOLDERS still in use: ACS shares, pop_day, nursing-home residents, depots, ERG table")
+    print("REAL:", ", ".join(used))
+    todo = (["ACS shares"] if not key else []) + ["hospital occupancy", "depots", "ERG table"]
+    print("PLACEHOLDERS still in use:", ", ".join(todo))
 
 
 if __name__ == "__main__":
