@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getBlockFrequency, getBlocks, getRail } from './api'
 import { ControlPanel } from './components/ControlPanel'
+import { DemoBar } from './components/DemoBar'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
 import { SummaryCards } from './components/SummaryCards'
 import { Timeline } from './components/Timeline'
+import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
 import { snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
@@ -58,6 +60,26 @@ export default function App() {
       .catch(() => undefined)
   }, [setParams])
 
+  // Guided demo: each step sets the controls from defaults and reruns.
+  const [demo, setDemo] = useState<number | null>(null)
+  const goDemo = useCallback(
+    (i: number) => {
+      const step = DEMO_STEPS[i]
+      if (!step) return
+      const snap = rail ? snapToRail(rail, CAPITOL[0], CAPITOL[1]) : null
+      const release = snap ? { release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) } : { release_lon: -89.381496, release_lat: 43.07134 }
+      const p = { ...DEFAULT_PARAMS, ...release, ...step.params }
+      setTab('live')
+      setDemo(i)
+      setPlaying(false)
+      setTime(null)
+      setParams(p)
+      if (!autoRun) void run(p)
+    },
+    [rail, autoRun, run, setParams],
+  )
+  const exitDemo = useCallback(() => setDemo(null), [])
+
   const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
 
   // A new result may be shorter than the current timeline position.
@@ -110,6 +132,9 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <button className={`demo-btn ${demo != null ? 'on' : ''}`} onClick={() => (demo == null ? goDemo(0) : exitDemo())}>
+          {demo == null ? '▶ Demo' : '■ Exit demo'}
+        </button>
         <div className="status">
           {tab === 'live' && srcLabel && <span className={`badge ${srcTone}`}>{srcLabel}</span>}
           {tab === 'live' && loading && <span className="badge"><span className="spinner sm" /> Simulating</span>}
@@ -162,6 +187,7 @@ export default function App() {
             setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))}
             frequencyMax={frequency ? frequency.max : null}
           />
+          {demo != null && <DemoBar steps={DEMO_STEPS} index={demo} onGo={goDemo} onExit={exitDemo} loading={loading} />}
           {derived && (
             <Timeline
               time={timeInRange}
