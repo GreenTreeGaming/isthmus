@@ -137,8 +137,14 @@ def make_tables(seed: int = 7) -> dict[str, pd.DataFrame]:
 def write_synthetic(out_dir: str | Path, seed: int = 7) -> Path:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
+    import geopandas as gpd
     for name, df in make_tables(seed).items():
-        df.to_parquet(out / f"{name}.parquet", index=False)
+        if "geometry" in df.columns:   # real GeoParquet, same as the data pipeline writes
+            gdf = gpd.GeoDataFrame(df.drop(columns="geometry"), geometry=shapely.from_wkb(df["geometry"]),
+                                   crs="EPSG:4326")
+            gdf.to_parquet(out / f"{name}.parquet", index=False)
+        else:
+            df.to_parquet(out / f"{name}.parquet", index=False)
     return out
 
 
