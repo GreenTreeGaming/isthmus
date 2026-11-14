@@ -35,6 +35,7 @@ export function AssumptionsTab() {
                   <dt>
                     {it.name}
                     {it.note && <small>{it.note}</small>}
+                    {it.key && <code className="const-key">{it.key}</code>}
                   </dt>
                   <dd className={typeof it.value === 'string' && it.value.length > 14 ? 'long' : 'mono'}>
                     {String(it.value)}

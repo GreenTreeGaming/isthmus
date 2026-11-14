@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DeckGL, { type DeckGLRef } from '@deck.gl/react'
 import type { PickingInfo } from '@deck.gl/core'
-import { GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from '@deck.gl/layers'
+import { GeoJsonLayer, PathLayer, ScatterplotLayer, TextLayer } from '@deck.gl/layers'
 import { HeatmapLayer } from '@deck.gl/aggregation-layers'
 import { PathStyleExtension, type PathStyleExtensionProps } from '@deck.gl/extensions'
 import { Map } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '../lib/maplibreWorker'
-import type { BlockFeature, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse } from '../types'
-import { COLORS, blockColor, loadColor } from '../lib/colors'
+import type { BlockFeature, BlockFrequency, BlockGeoCollection, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse } from '../types'
+import { COLORS, blockColor, frequencyColor, loadColor } from '../lib/colors'
 import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
 import { along, distM } from '../lib/geo'
 import { Tooltip, type HoverInfo } from './Tooltip'
@@ -23,6 +23,7 @@ export interface LayerToggles {
   roads: boolean
   traffic: boolean
   buses: boolean
+  frequency: boolean
 }
 
 interface Props {
@@ -35,6 +36,9 @@ interface Props {
   onPickRelease: (lon: number, lat: number) => void
   hoveredBus: number | null
   setHoveredBus: (id: number | null) => void
+  blockGeo: BlockGeoCollection | null
+  frequency: Map<string, BlockFrequency> | null
+  frequencyMax: number
 }
 
 interface Particle {
@@ -43,7 +47,7 @@ interface Particle {
   edge: EdgeFeature
 }
 
-export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus, setHoveredBus }: Props) {
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus, setHoveredBus, blockGeo, frequency, frequencyMax }: Props) {
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [phase, setPhase] = useState(0)
   const raf = useRef(0)
@@ -128,25 +132,32 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         opacity: 0.75,
       }),
     toggles.blocks &&
-      result &&
-      new SolidPolygonLayer<BlockFeature>({
+      derived &&
+      new GeoJsonLayer<BlockFeature['properties']>({
         id: 'blocks',
-        data: result.blocks.features,
-        getPolygon: (f) => f.geometry.coordinates as [number, number][][],
-        getFillColor: (f) => blockColor(f.properties, toggles.heatmap ? 70 : 150),
-        pickable: true,
-        transitions: { getFillColor: 450 },
-        updateTriggers: { getFillColor: [toggles.heatmap] },
-      }),
-    toggles.blocks &&
-      result &&
-      new GeoJsonLayer({
-        id: 'block-outlines',
-        data: result.blocks,
-        filled: false,
+        data: derived.blockFeatures,
+        filled: true,
         stroked: true,
-        getLineColor: (f) => ((f.properties as { decision: string }).decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
+        getFillColor: (f) => blockColor(f.properties, toggles.heatmap || toggles.frequency ? 60 : 150),
+        getLineColor: (f) => (f.properties.decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
         lineWidthMinPixels: 0.6,
+        pickable: !toggles.frequency,
+        transitions: { getFillColor: 450 },
+        updateTriggers: { getFillColor: [toggles.heatmap, toggles.frequency] },
+      }),
+    toggles.frequency &&
+      blockGeo &&
+      frequency &&
+      new GeoJsonLayer<{ block_id: string }>({
+        id: 'block-frequency',
+        data: blockGeo.features,
+        filled: true,
+        stroked: true,
+        getFillColor: (f) => frequencyColor((frequency.get(f.properties.block_id)?.share_shelter ?? 0) / frequencyMax),
+        updateTriggers: { getFillColor: [frequency, frequencyMax] },
+        getLineColor: [10, 12, 16, 120],
+        lineWidthMinPixels: 0.5,
+        pickable: true,
       }),
     result &&
       new GeoJsonLayer({
@@ -354,7 +365,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       >
         <Map mapStyle={BASEMAP} attributionControl={{ compact: true }} />
       </DeckGL>
-      {hover && result && <Tooltip info={hover} result={result} derived={derived} edgeLoadNow={edgeLoadNow} time={time} />}
+      {hover && result && <Tooltip info={hover} result={result} derived={derived} edgeLoadNow={edgeLoadNow} time={time} frequency={frequency} />}
     </div>
   )
 }

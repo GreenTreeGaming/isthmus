@@ -1,4 +1,4 @@
-import type { Assumptions, Insights, RailCollection, ScenarioParams, ScenarioResponse } from './types'
+import type { Assumptions, BlockFrequency, BlockGeoCollection, Insights, RailCollection, ScenarioParams, ScenarioResponse } from './types'
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
@@ -32,4 +32,6 @@ export const simulate = (params: ScenarioParams, signal?: AbortSignal) =>
 
 export const getRail = () => request<RailCollection>('/rail')
 export const getInsights = () => request<Insights>('/insights')
+export const getBlocks = () => request<BlockGeoCollection>('/blocks')
+export const getBlockFrequency = () => request<BlockFrequency[]>('/block-frequency')
 export const getAssumptions = () => request<Assumptions>('/assumptions')
