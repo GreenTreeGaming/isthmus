@@ -211,7 +211,8 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
                           "geometry": {"type": "LineString", "coordinates": [_ll(ax, ay), _ll(bx, by)]},
                           "properties": {"edge_id": eid, "name": name, "flow_veh": round(flow),
                                          "peak_load_ratio": round(ratio, 3), "congested_at_s": congested,
-                                         "is_bottleneck": False}})
+                                         "is_bottleneck": False,
+                                         "road_class": "primary" if cap >= 1500 else "residential"}})
             timeline[str(eid)] = series
     ranked = sorted(edges, key=lambda f: -f["properties"]["peak_load_ratio"])
     bottlenecks = [f["properties"]["edge_id"] for f in ranked[:4] if f["properties"]["peak_load_ratio"] > 0.9]
