@@ -18,6 +18,11 @@ import type { Selection } from './InfoCard'
 const INITIAL_VIEW = { longitude: -89.374, latitude: 43.075, zoom: 13.5, pitch: 0, bearing: 0 }
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 const MAX_PARTICLES = 4000
+const ROAD_WEIGHT: Record<string, number> = {
+  motorway: 1.6, trunk: 1.6, primary: 1.5, secondary: 1.35, tertiary: 1.2,
+  motorway_link: 1.2, trunk_link: 1.2, primary_link: 1.2, secondary_link: 1.1, tertiary_link: 1.05,
+  residential: 1, unclassified: 1, living_street: 0.8, service: 0.8,
+}
 
 export interface LayerToggles {
   blocks: boolean
@@ -122,12 +127,16 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
     if (!result) return []
     const seen = new Set<string>()
     const out: { position: [number, number]; text: string }[] = []
-    const sorted = result.edges.features.filter((f) => f.properties.is_bottleneck && f.properties.name).sort((a, b) => b.properties.peak_load_ratio - a.properties.peak_load_ratio)
+    // Prefer major roads: a primary street at 1.2x load outranks a residential court at 1.4x.
+    const score = (f: EdgeFeature) => f.properties.peak_load_ratio * (ROAD_WEIGHT[f.properties.road_class ?? ''] ?? 1)
+    const sorted = result.edges.features.filter((f) => f.properties.is_bottleneck && f.properties.name).sort((a, b) => score(b) - score(a))
     for (const f of sorted) {
       const name = f.properties.name!
       if (seen.has(name)) continue
+      const position = along(f.geometry.coordinates as [number, number][], 0.5)
+      if (out.some((o) => distM(o.position, position) < 500)) continue // keep labels from stacking
       seen.add(name)
-      out.push({ position: along(f.geometry.coordinates as [number, number][], 0.5), text: name })
+      out.push({ position, text: name })
       if (out.length === 3) break
     }
     return out

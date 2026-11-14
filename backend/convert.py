@@ -25,6 +25,7 @@ class Lookup:
     block_vuln: dict[str, float] = field(default_factory=dict)            # block_id -> 0..1
     edge_geom: dict[int, list[list[float]]] = field(default_factory=dict)  # edge_id -> [[lon, lat], ...]
     edge_name: dict[int, str | None] = field(default_factory=dict)
+    edge_class: dict[int, str | None] = field(default_factory=dict)       # OSM road_class (primary, residential, ...)
     node_coord: dict[int, list[float]] = field(default_factory=dict)      # node_id -> [lon, lat]
     stop_coord: dict[str, list[float]] = field(default_factory=dict)      # pickup/depot id -> [lon, lat]
 
@@ -51,9 +52,11 @@ def load_lookup(data_dir: Path) -> Lookup:
         lk.block_vuln[str(bid)] = round(v / top, 3)
 
     edges = gpd.read_parquet(data_dir / "road_edges.parquet")
-    for eid, name, geom in zip(edges["edge_id"], edges["name"], edges.geometry):
+    classes = edges["road_class"] if "road_class" in edges.columns else [None] * len(edges)
+    for eid, name, rc, geom in zip(edges["edge_id"], edges["name"], classes, edges.geometry):
         lk.edge_geom[int(eid)] = [list(c[:2]) for c in geom.coords]
         lk.edge_name[int(eid)] = None if pd.isna(name) else str(name)
+        lk.edge_class[int(eid)] = None if rc is None or pd.isna(rc) else str(rc)
 
     nodes = pd.read_parquet(data_dir / "road_nodes.parquet", columns=["node_id", "lon", "lat"])
     lk.node_coord = {int(n): [float(x), float(y)] for n, x, y in zip(nodes["node_id"], nodes["lon"], nodes["lat"])}
@@ -90,6 +93,13 @@ def _sim_step_s() -> int:
         return int(getattr(assumptions, "SIM_STEP_S", DEFAULT_STEP_S))
     except ImportError:
         return DEFAULT_STEP_S
+
+
+def _deadlines(r: Any) -> list[float | None]:
+    d = list(getattr(r, "deadline_s", None) or [])
+    if len(d) != len(r.stops):  # older engine output: unknown, never guessed
+        return [None] * len(r.stops)
+    return [_num(x) for x in d]
 
 
 def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = None) -> dict[str, Any]:
@@ -129,6 +139,8 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
                                   "peak_load_ratio": _num(e.peak_load_ratio, 3),
                                   "congested_at_s": _num(e.congested_at_s),
                                   "is_bottleneck": bool(e.is_bottleneck),
+                                  # Not in contracts/api_response.json yet: lets the UI prefer major roads for labels.
+                                  "road_class": lk.edge_class.get(e.edge_id),
                               }})
 
     buses = [{
@@ -137,6 +149,8 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
         "arrival_s": [_num(t) for t in r.arrival_s],
         "load": [int(x) for x in r.load],
         "path": [lk.node_coord[n] for n in r.path_node_ids if n in lk.node_coord],
+        # Per stop: the gas-arrival deadline the router enforced (null for garage/shelter).
+        "deadline_s": _deadlines(r),
         # Not in contracts/api_response.json yet: one [lon, lat] per stop (null if unknown).
         "stop_coords": [lk.stop_coord.get(str(sid)) for sid in r.stops],
     } for r in result.buses]

@@ -1,5 +1,5 @@
 import type { BlockFeature, BlockGeoCollection, Bus, BlockProps, ScenarioResponse } from '../types'
-import { along, centroid, distM } from './geo'
+import { along, centroid } from './geo'
 
 export interface BlockPoint {
   position: [number, number]
@@ -58,7 +58,6 @@ export function derive(r: ScenarioResponse, geo: BlockGeoCollection): Derived {
     blockFeatures.push({ type: 'Feature', geometry: f.geometry, properties: props })
     blockPoints.push({ position: centroid(outerRing(f)), props })
   }
-  const affected = blockPoints.filter((b) => b.props.decision !== 'outside' && b.props.plume_arrival_s != null)
 
   const stops: BusStop[] = []
   const busLate = new Map<number, number>()
@@ -66,18 +65,8 @@ export function derive(r: ScenarioResponse, geo: BlockGeoCollection): Derived {
     b.stops.forEach((id, i) => {
       const kind = stopKind(id, i, b.stops.length)
       const pos = stopPosition(b, i)
-      let deadline: number | null = null
-      if (kind === 'pickup' && pos) {
-        // Pickup deadline = plume arrival at the nearest affected block (within 400 m).
-        let best = 400
-        for (const a of affected) {
-          const d = distM(pos, a.position)
-          if (d < best) {
-            best = d
-            deadline = a.props.plume_arrival_s
-          }
-        }
-      }
+      // The exact deadline the engine's bus router enforced; scheduled stops always meet it.
+      const deadline = kind === 'pickup' ? (b.deadline_s?.[i] ?? null) : null
       const late = deadline != null && b.arrival_s[i] > deadline
       if (late) busLate.set(b.bus_id, (busLate.get(b.bus_id) ?? 0) + 1)
       stops.push({ bus_id: b.bus_id, stop_id: id, index: i, kind, position: pos, arrival_s: b.arrival_s[i], load: b.load[i], deadline_s: deadline, late })

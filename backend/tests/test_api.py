@@ -131,7 +131,8 @@ def test_converter_matches_contract():
         blocks=[BlockResult("b1", "evacuate", 1500.0, 1100.0, 0, 140.0, 35.0, 8.0),
                 BlockResult("missing", "shelter", None, None, None, 0, 0, 0)],
         edges=[EdgeLoad(101, 2900.0, 1.35, 840.0, True)],
-        buses=[BusRoute(0, ["garage_main", "shelter_east"], [0.0, 900.0], [0, 0], [1, 2, 99])],
+        buses=[BusRoute(0, ["garage_main", "stop_1", "shelter_east"], [0.0, 600.0, 900.0], [0, 5, 0], [1, 2, 99],
+                        deadline_s=[None, 840.0, None])],
         summary=Summary(7380, 18240, 3150, 940, 60, [101], 2140, sim_clearance_s=9900),
         load_timeline={101: [0.1, 0.5, 1.35]},
     )
@@ -149,7 +150,25 @@ def test_converter_matches_contract():
     assert list(out["blocks"]) == ["b1"]                 # unknown block skipped, not crashed
     assert out["blocks"]["b1"]["vulnerability"] == 0.4
     assert out["buses"][0]["path"] == [[-89.35, 43.09], [-89.33, 43.1]]  # unknown node dropped
+    assert out["buses"][0]["deadline_s"] == [None, 840.0, None]  # same order as stops
     assert out["timeline"] == {"step_s": 30, "edge_load": {"101": [0.1, 0.5, 1.35]}}
     geo = blocks_geojson(lk)
     assert geo["features"][0]["properties"] == {"block_id": "b1"}
     assert geo["features"][0]["geometry"]["coordinates"][0][0] == [0.123457, 0.0]
+
+
+def test_converter_deadlines_missing_or_mismatched():
+    from backend.convert import _deadlines
+    assert _deadlines(BusRoute(0, ["g", "s"], [0.0, 1.0], [0, 0], [])) == [None, None]
+    assert _deadlines(BusRoute(0, ["g", "p", "s"], [0.0, 1.0, 2.0], [0, 1, 0], [], deadline_s=[None, 5.0])) == [None] * 3
+
+
+def test_mock_bus_deadlines_respected():
+    from backend.mock import run_mock
+    for tod in ("day", "night"):
+        r = run_mock(ScenarioParams(release_lon=-89.3705, release_lat=43.079, time_of_day=tod, bus_count=5))
+        for b in r["buses"]:
+            assert len(b["deadline_s"]) == len(b["stops"])
+            assert b["deadline_s"][0] is None and b["deadline_s"][-1] is None
+            for t, d in zip(b["arrival_s"], b["deadline_s"]):
+                assert d is None or t <= d   # a scheduled stop is never late

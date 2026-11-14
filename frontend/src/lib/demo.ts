@@ -50,9 +50,9 @@ export const DEMO_STEPS: DemoStep[] = [
   {
     title: 'Too few buses',
     caption:
-      'Cut the fleet from 20 buses to 2. Residents who need a ride are no longer all picked up before the gas arrives — the areas with the most residents who need help are left waiting.',
-    params: { ...BASE, bus_count: 2 },
-    compareTo: { ...BASE },
-    compareLabel: '20 buses',
+      'At night, with only 5 buses instead of 20, hundreds of residents who need a ride cannot be reached before the gas arrives — the areas with the most residents who need help are left waiting.',
+    params: { ...BASE, time_of_day: 'night', bus_count: 5 },
+    compareTo: { ...BASE, time_of_day: 'night' },
+    compareLabel: 'Night, 20 buses',
   },
 ]

@@ -40,7 +40,6 @@ export function Legend({ toggles, setToggle, frequencyMax, hidden }: Props) {
         <div className="gradient-scale"><span>free</span><span>at capacity</span><span>over</span></div>
         <div className="legend-item"><i className="line glow" />Bottleneck (thick, dashed)</div>
         <div className="legend-item"><i className="line bus" />Bus route (click for stops)</div>
-        <div className="legend-item"><i className="stop late" />Pickup after plume arrives</div>
       </div>
       {toggles.frequency && frequencyMax != null && (
         <div className="legend-group">

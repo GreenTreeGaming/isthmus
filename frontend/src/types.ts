@@ -51,6 +51,8 @@ export interface EdgeProps {
   peak_load_ratio: number
   congested_at_s: number | null
   is_bottleneck: boolean
+  /** Backend extra (not yet in contracts/): OSM road class, e.g. primary, residential. */
+  road_class?: string | null
 }
 
 export interface Bus {
@@ -59,6 +61,8 @@ export interface Bus {
   arrival_s: number[]
   load: number[]
   path: [number, number][]
+  /** Per stop: the gas-arrival deadline the bus router enforced (null for garage/shelter). */
+  deadline_s?: (number | null)[]
   /** Backend extra (not yet in contracts/): one [lon, lat] per stop, null where unknown. */
   stop_coords?: ([number, number] | null)[]
 }

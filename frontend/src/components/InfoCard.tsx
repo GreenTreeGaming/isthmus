@@ -62,7 +62,7 @@ function BusCard({ bus, stops }: { bus: Bus; stops: BusStop[] }) {
           <div className="why-title">Bus {bus.bus_id + 1}</div>
           <div className="why-sentence">
             {stops.filter((s) => s.kind === 'pickup').length} pickups ·{' '}
-            {late > 0 ? <span className="bad">{late} after the gas arrives</span> : <span className="good">all before the gas arrives</span>}
+            {late > 0 ? <span className="bad">{late} after the deadline</span> : <span className="good">each before its gas deadline</span>}
           </div>
         </div>
       </div>
@@ -83,7 +83,10 @@ function BusCard({ bus, stops }: { bus: Bus; stops: BusStop[] }) {
           })}
         </tbody>
       </table>
-      <div className="why-foot">"Gas at" = when the plume reaches the nearest affected area. Times from the alert.</div>
+      <div className="why-foot">
+        "Gas at" = the deadline the bus router enforced for that stop. Residents no bus could reach in time are counted as "left behind" on
+        the Need a bus card. Times from the alert.
+      </div>
     </>
   )
 }

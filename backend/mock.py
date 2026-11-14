@@ -236,7 +236,7 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
     for bus_id in range(p.bus_count):
         if not queue:
             break
-        stops, arr, load, path = [GARAGE[0]], [0.0], [0], [list(GARAGE[1])]
+        stops, arr, load, path, dl = [GARAGE[0]], [0.0], [0], [list(GARAGE[1])], [None]
         t, pos, onboard = 0.0, GARAGE[1], 0
         while queue and len(stops) < 4 and onboard < p.bus_capacity:
             j = 0
@@ -246,10 +246,13 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
                     break
             a, bid, x, y, n = queue[j]
             ll = tuple(_ll(x, y))
-            t += dist_ll(pos, ll) / bus_speed + 90
+            t_next = t + dist_ll(pos, ll) / bus_speed + 90
+            if t_next > a:  # like the engine: never schedule a pickup after the gas arrives
+                queue.pop(j)
+                continue
+            t = t_next
             take = min(n, p.bus_capacity - onboard)
-            if t <= a:
-                served += take
+            served += take
             onboard += int(round(take))
             queue[j][4] -= take
             if queue[j][4] < 1:
@@ -258,13 +261,17 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
             arr.append(round(t))
             load.append(onboard)
             path.append(list(ll))
+            dl.append(round(a))
             pos = ll
         t += dist_ll(pos, shelter[1]) / bus_speed
         stops.append(shelter[0])
         arr.append(round(t))
         load.append(0)
         path.append(list(shelter[1]))
-        buses.append({"bus_id": bus_id, "stops": stops, "arrival_s": arr, "load": load, "path": path,
+        dl.append(None)
+        if len(stops) == 2:  # nobody reachable in time
+            continue
+        buses.append({"bus_id": bus_id, "stops": stops, "arrival_s": arr, "load": load, "path": path, "deadline_s": dl,
                       "stop_coords": [list(c) for c in path]})
 
     return {
