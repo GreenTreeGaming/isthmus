@@ -1,0 +1,167 @@
+{
+ "source": "gold",
+ "n_scenarios": 192,
+ "n_failed": 0,
+ "top_bottlenecks": [
+  {
+   "edge_id": 3139,
+   "name": "Elm Drive",
+   "times_bottleneck": 15,
+   "share": 0.078
+  },
+  {
+   "edge_id": 1890,
+   "name": "West Wilson Street",
+   "times_bottleneck": 15,
+   "share": 0.078
+  },
+  {
+   "edge_id": 3215,
+   "name": "Langdon Street",
+   "times_bottleneck": 13,
+   "share": 0.068
+  },
+  {
+   "edge_id": 1459,
+   "name": "East Lakeside Street",
+   "times_bottleneck": 13,
+   "share": 0.068
+  },
+  {
+   "edge_id": 3263,
+   "name": "Olin-Turville Court",
+   "times_bottleneck": 13,
+   "share": 0.068
+  },
+  {
+   "edge_id": 1410,
+   "name": "South Dickinson Street",
+   "times_bottleneck": 12,
+   "share": 0.062
+  },
+  {
+   "edge_id": 2239,
+   "name": "North Park Street",
+   "times_bottleneck": 12,
+   "share": 0.062
+  },
+  {
+   "edge_id": 1716,
+   "name": "West Washington Avenue",
+   "times_bottleneck": 11,
+   "share": 0.057
+  },
+  {
+   "edge_id": 2149,
+   "name": "South Pinckney Street",
+   "times_bottleneck": 10,
+   "share": 0.052
+  },
+  {
+   "edge_id": 2365,
+   "name": "South Park Street",
+   "times_bottleneck": 10,
+   "share": 0.052
+  }
+ ],
+ "facilities_in_zone": [
+  {
+   "facility_id": "cms_525305",
+   "name": "Capitol Lakes Health Center",
+   "type": "nursing_home",
+   "share": 0.51
+  },
+  {
+   "facility_id": "hospital_0",
+   "name": "UnityPoint Health - Meriter",
+   "type": "hospital",
+   "share": 0.458
+  },
+  {
+   "facility_id": "hospital_2",
+   "name": "Saint Mary's Hospital",
+   "type": "hospital",
+   "share": 0.38
+  },
+  {
+   "facility_id": "hospital_1",
+   "name": "William S. Middleton Memorial Veterans Hospital",
+   "type": "hospital",
+   "share": 0.182
+  }
+ ],
+ "worst_wind": [
+  {
+   "wind_from_deg": 270.0,
+   "mean_clearance_s": 4508.8,
+   "mean_unserved": 0.0,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 315.0,
+   "mean_clearance_s": 3716.2,
+   "mean_unserved": 0.1,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 135.0,
+   "mean_clearance_s": 3611.2,
+   "mean_unserved": 0.3,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 0.0,
+   "mean_clearance_s": 3441.2,
+   "mean_unserved": 0.0,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 180.0,
+   "mean_clearance_s": 3325.0,
+   "mean_unserved": 0.0,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 45.0,
+   "mean_clearance_s": 3036.2,
+   "mean_unserved": 0.0,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 225.0,
+   "mean_clearance_s": 2942.5,
+   "mean_unserved": 0.0,
+   "n": 24
+  },
+  {
+   "wind_from_deg": 90.0,
+   "mean_clearance_s": 2941.2,
+   "mean_unserved": 0.0,
+   "n": 24
+  }
+ ],
+ "by_time_of_day": [
+  {
+   "time_of_day": "day",
+   "mean_clearance_s": 3017.3,
+   "mean_evacuating": 6379.3,
+   "mean_sheltering": 25523.8,
+   "mean_unserved": 0.1
+  },
+  {
+   "time_of_day": "gameday",
+   "mean_clearance_s": 3476.2,
+   "mean_evacuating": 7392.2,
+   "mean_sheltering": 41675.3,
+   "mean_unserved": 0.1
+  },
+  {
+   "time_of_day": "night",
+   "mean_clearance_s": 3827.3,
+   "mean_evacuating": 5802.1,
+   "mean_sheltering": 36792.2,
+   "mean_unserved": 0.0
+  }
+ ],
+ "median_runtime_ms": 477.45
+}

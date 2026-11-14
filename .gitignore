@@ -8,8 +8,6 @@ __pycache__/
 # Data (large / regenerable) — fixtures ARE committed
 data/raw/
 data/bronze/
-data/silver/
-data/gold/
 *.pkl
 *.gpickle
 cache/
@@ -28,3 +26,6 @@ dist/
 .DS_Store
 .idea/
 .vscode/
+
+# engine pickle cache next to silver tables
+_network_cache.pkl
