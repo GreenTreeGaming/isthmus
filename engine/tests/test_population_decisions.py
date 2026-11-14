@@ -41,7 +41,7 @@ def test_visitors_add_vehicles_on_gameday():
 
 def test_daytime_fewer_residents():
     s = split_population(_blocks(pop_day=[50.0]), "day").iloc[0]
-    assert s.pop == 50
+    assert s["pop"] == 50
     assert s.driver_people + s.walkers + s.need_bus == pytest.approx(50.0)
 
 
