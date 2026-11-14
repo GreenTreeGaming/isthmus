@@ -66,6 +66,7 @@ SIM_STEP_S = 30                   # queue simulation time step
 MAX_SIM_S = 6 * 3600              # stop simulating after 6 h
 MAX_CLEARANCE_S = 48 * 3600       # binary-search ceiling
 CLEARANCE_TOLERANCE_S = 30        # binary-search precision
+ROUTING_SLACK_FACTORS = (1.0, 1.1, 1.25, 1.5, 2.0, 3.0)  # route at T*×f, keep f minimizing T + longest route
 DECISION_REFINE_ITERS = 2         # re-check evacuate/shelter after waves are assigned
 
 # --------------------------------------------------------------------------- hazard
