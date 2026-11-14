@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getAssumptions, getBlockFrequency, getBlocks, getRail } from './api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getAssumptions, getBlockFrequency, getBlocks, getRail, simulate } from './api'
 import { ControlPanel } from './components/ControlPanel'
 import { DemoBar } from './components/DemoBar'
 import { InfoCard, type Selection } from './components/InfoCard'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
 import { ScenarioStrip } from './components/ScenarioStrip'
-import { SummaryCards } from './components/SummaryCards'
+import { SummaryCards, type Pinned } from './components/SummaryCards'
 import { Timeline } from './components/Timeline'
 import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
@@ -14,7 +14,7 @@ import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
 import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
 import { PlanningTab } from './tabs/PlanningTab'
-import type { BlockFrequency, BlockGeoCollection, RailCollection } from './types'
+import type { BlockFrequency, BlockGeoCollection, RailCollection, ScenarioParams } from './types'
 import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
 type Tab = 'live' | 'planning' | 'assumptions'
@@ -23,6 +23,11 @@ const SOURCE_LABEL: Record<string, [string, string]> = {
   placeholder: ['Placeholder data', 'warn'],
   mock: ['Mock engine', 'warn'],
   real: ['Live engine', 'ok'],
+}
+
+const TOD_SHORT: Record<string, string> = { night: 'Night', day: 'Day', gameday: 'Game day' }
+function shortLabel(p: ScenarioParams) {
+  return `${TOD_SHORT[p.time_of_day]}, ${p.wind_speed_mps} m/s, ${p.bus_count} buses${p.contraflow ? ', contraflow' : ''}`
 }
 
 export default function App() {
@@ -75,6 +80,10 @@ export default function App() {
       .catch(() => undefined)
   }, [setParams])
 
+  // Compare: a pinned summary that later runs are measured against.
+  const [pinned, setPinned] = useState<Pinned | null>(null)
+  const compareSeq = useRef(0)
+
   // Guided demo: each step sets the controls from defaults and reruns.
   const [demo, setDemo] = useState<number | null>(null)
   const goDemo = useCallback(
@@ -90,10 +99,25 @@ export default function App() {
       setTime(null)
       setParams(p)
       if (!autoRun) void run(p)
+      // Steps with a baseline run it quietly and pin it, so the cards show what changed.
+      const seq = ++compareSeq.current
+      setPinned(null)
+      if (step.compareTo) {
+        const base: ScenarioParams = { ...DEFAULT_PARAMS, ...release, ...step.compareTo }
+        simulate(base)
+          .then((r) => {
+            if (compareSeq.current === seq) setPinned({ summary: r.data.summary, label: step.compareLabel ?? 'Baseline' })
+          })
+          .catch(() => undefined)
+      }
     },
     [rail, autoRun, run, setParams],
   )
-  const exitDemo = useCallback(() => setDemo(null), [])
+  const exitDemo = useCallback(() => {
+    compareSeq.current += 1
+    setDemo(null)
+    setPinned(null)
+  }, [])
 
   const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
 
@@ -196,8 +220,23 @@ export default function App() {
             place={place}
           />
           <div className="overlay-top">
-            <ScenarioStrip params={params} railName={railName} place={place} />
-            <SummaryCards summary={result?.summary ?? null} loading={loading} />
+            <ScenarioStrip params={params} railName={railName} place={place}>
+              {pinned ? (
+                <button className="chip pinned" onClick={() => setPinned(null)} title="Stop comparing">
+                  Comparing with: {pinned.label} <span aria-hidden>✕</span>
+                </button>
+              ) : (
+                <button
+                  className="chip"
+                  disabled={!result || loading}
+                  onClick={() => result && setPinned({ summary: result.summary, label: shortLabel(result.params) })}
+                  title="Save this result; the next runs show what changed"
+                >
+                  📌 Pin result
+                </button>
+              )}
+            </ScenarioStrip>
+            <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} />
             {error && (
               <div className="error-box" role="alert">
                 <b>Simulation failed.</b> {error}

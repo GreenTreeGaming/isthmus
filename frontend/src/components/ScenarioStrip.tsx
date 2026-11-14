@@ -19,7 +19,7 @@ export function ScenarioStrip({ params: p, railName, place, children }: Props) {
     `Wind ${compass(p.wind_from_deg)} ${p.wind_speed_mps.toFixed(1)} m/s`,
     `${p.bus_count} bus${p.bus_count === 1 ? '' : 'es'}`,
     p.contraflow ? 'Contraflow on' : null,
-    p.compliance < 0.995 ? `${Math.round(p.compliance * 100)}% comply` : null,
+    Math.abs(p.compliance - 0.85) > 0.005 ? `${Math.round(p.compliance * 100)}% comply` : null,
   ].filter(Boolean)
   return (
     <div className="scenario-strip">
