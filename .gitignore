@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Data (large / regenerable) — fixtures ARE committed
+data/raw/
+data/bronze/
+data/silver/
+data/gold/
+*.pkl
+*.gpickle
+cache/
+
+# Node
+node_modules/
+dist/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+.databrickscfg
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

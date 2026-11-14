@@ -1,0 +1,13 @@
+osmnx
+networkx
+geopandas
+shapely
+pyproj
+pandas
+pyarrow
+numpy
+ortools
+fastapi
+uvicorn[standard]
+requests
+pytest
