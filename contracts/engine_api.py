@@ -62,6 +62,9 @@ class BusRoute:
     arrival_s: list[float]                # arrival time at each stop
     load: list[int]                       # people on board after each stop
     path_node_ids: list[int]              # full node path for drawing
+    deadline_s: list[float | None] = field(default_factory=list)
+    # per stop: the gas-arrival deadline the router enforced (None for garage/shelter).
+    # Use this for "gas at" / LATE in the UI so it always agrees with need_bus_unserved.
 
 
 @dataclass

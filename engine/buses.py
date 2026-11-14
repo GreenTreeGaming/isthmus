@@ -157,22 +157,24 @@ def plan_buses(G: nx.DiGraph, edge_time_s: dict[int, float], zone_edge_ids: set[
             idx = sol.Value(routing.NextVar(idx))
         if len(seq) <= 2:
             continue
-        stops_out, arrive, load, path = [], [], [], []
+        stops_out, arrive, load, path, deadlines = [], [], [], [], []
         for x, (m, t, l) in enumerate(seq):
             ki = model_nodes[m]
             if m == 0:
-                stops_out.append(garage[0]); load.append(0)
+                stops_out.append(garage[0]); load.append(0); deadlines.append(None)
             elif m == 1:
-                stops_out.append(shelter[0]); load.append(0)
+                stops_out.append(shelter[0]); load.append(0); deadlines.append(None)
             else:
                 stops_out.append(chunks[ki - 2].stop_id); load.append(int(l + demand[m]))
+                deadlines.append(float(chunks[ki - 2].deadline_s))
                 served += demand[m]
             arrive.append(float(t))
             if x + 1 < len(seq):
                 nk = model_nodes[seq[x + 1][0]]
                 seg = upaths.get((pos[keys[ki]], pos[keys[nk]]), [])
                 path.extend(seg if not path else seg[1:])
-        routes.append(BusRoute(bus_id=v, stops=stops_out, arrival_s=arrive, load=load, path_node_ids=path))
+        routes.append(BusRoute(bus_id=v, stops=stops_out, arrival_s=arrive, load=load, path_node_ids=path,
+                                  deadline_s=deadlines))
 
     return BusPlan(routes=routes, served=served, unserved=max(0.0, total - served))
 

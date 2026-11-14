@@ -52,3 +52,12 @@ def test_congested_times_used():
     p = plan_buses(_line(), slow, set(), set(), ("garage", 0), ("shelter", 3),
                    [Stop("s", 1, 5, deadline_s=500)], 1, 60, dispatch_s=0)
     assert p.unserved == 5          # 1000 s to reach node 1 > 500 s deadline
+
+
+def test_deadlines_reported_and_respected():
+    p = _plan([Stop("a", 1, 5, deadline_s=5000), Stop("b", 2, 5, deadline_s=6000)])
+    for r in p.routes:
+        assert len(r.deadline_s) == len(r.stops)
+        assert r.deadline_s[0] is None and r.deadline_s[-1] is None
+        for t, d in zip(r.arrival_s[1:-1], r.deadline_s[1:-1]):
+            assert t <= d
