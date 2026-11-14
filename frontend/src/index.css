@@ -396,3 +396,21 @@ input[type='range']:focus-visible { outline: 2px solid var(--blue); outline-offs
 .stop-table td { padding: 6px 6px 6px 0; border-top: 1px solid var(--border); white-space: nowrap; }
 .stop-table tr.late td { color: var(--bad); }
 .stop-table .pill { margin-left: 6px; }
+
+/* ---------- Scenario strip ---------- */
+.scenario-strip {
+  display: flex; align-items: center; gap: 14px; padding: 8px 10px 8px 14px; min-height: 44px;
+  background: var(--surface); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.strip-pin { width: 11px; height: 11px; flex: none; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--red), 0 0 12px var(--red); }
+.strip-where { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; flex: 0 1 auto; }
+.strip-where b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.strip-where span { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.strip-params { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; font-size: 15px; font-weight: 600; color: var(--text); padding-left: 14px; border-left: 1px solid var(--border-strong); flex: 1; min-width: 0; }
+.strip-params span + span::before { content: '·'; margin: 0 9px; color: var(--muted); font-weight: 400; }
+.strip-actions { display: flex; gap: 8px; align-items: center; flex: none; margin-left: auto; }
+.release-where { display: flex; flex-direction: column; gap: 1px; }
+.release-where b { font-size: 15px; }
+.release-where span { font-size: 13px; color: var(--text-2); }
+.release-where .coords { color: var(--muted); font-size: 12px; margin-top: 2px; }

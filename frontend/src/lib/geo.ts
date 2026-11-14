@@ -64,3 +64,46 @@ export function along(path: Position[], f: number): [number, number] {
   const last = path[path.length - 1]
   return [last[0], last[1]]
 }
+
+/** Name of the rail line nearest to a point (null if unnamed / no rail). */
+export function nearestRailName(rail: RailCollection, lon: number, lat: number): string | null {
+  let best = Infinity
+  let name: string | null = null
+  for (const f of rail.features) {
+    const one: RailCollection = { type: 'FeatureCollection', features: [f] }
+    const s = snapToRail(one, lon, lat)
+    if (s && s[2] < best) {
+      best = s[2]
+      name = f.properties.name
+    }
+  }
+  return name
+}
+
+const LANDMARKS: [string, [number, number]][] = [
+  ['the Capitol', [-89.3841, 43.0747]],
+  ['Camp Randall', [-89.4125, 43.07]],
+  ['Monona Terrace', [-89.38, 43.0717]],
+  ['the Kohl Center', [-89.3962, 43.0694]],
+  ['Tenney Park', [-89.3663, 43.0925]],
+]
+
+/** "400 m SE of the Capitol" relative to the nearest landmark. */
+export function nearLandmark(lon: number, lat: number): string {
+  let best = LANDMARKS[0]
+  let d = Infinity
+  for (const l of LANDMARKS) {
+    const dd = distM([lon, lat], l[1])
+    if (dd < d) {
+      d = dd
+      best = l
+    }
+  }
+  if (d < 150) return `at ${best[0]}`
+  const dx = (lon - best[1][0]) * mPerDegLon(lat)
+  const dy = (lat - best[1][1]) * M_PER_DEG_LAT
+  const dirs = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE']
+  const dir = dirs[Math.round(((Math.atan2(dy, dx) * 180) / Math.PI + 360) / 45) % 8]
+  const dist = d < 1000 ? `${Math.round(d / 50) * 50} m` : `${(d / 1000).toFixed(1)} km`
+  return `${dist} ${dir} of ${best[0]}`
+}

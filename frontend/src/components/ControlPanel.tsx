@@ -10,6 +10,8 @@ interface Props {
   autoRun: boolean
   setAutoRun: (v: boolean) => void
   pickHint: string | null
+  railName: string | null
+  place: string
 }
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
@@ -37,7 +39,7 @@ function Slider({ label, value, display, min, max, step, onChange }: { label: st
   )
 }
 
-export function ControlPanel({ params, update, onRun, onReset, loading, autoRun, setAutoRun, pickHint }: Props) {
+export function ControlPanel({ params, update, onRun, onReset, loading, autoRun, setAutoRun, pickHint, railName, place }: Props) {
   return (
     <aside className="panel controls">
       <section>
@@ -46,8 +48,10 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
           <span className="pin-dot" />
           {pickHint ?? 'Click a rail line to place the derailment. Click a colored area or bus route to see why.'}
         </div>
-        <div className="coords mono">
-          {params.release_lat.toFixed(4)}°N, {Math.abs(params.release_lon).toFixed(4)}°W
+        <div className="release-where">
+          <b>{railName ?? 'Rail line'}</b>
+          <span>{place}</span>
+          <span className="coords mono">{params.release_lat.toFixed(4)}°N, {Math.abs(params.release_lon).toFixed(4)}°W</span>
         </div>
       </section>
 

@@ -5,12 +5,13 @@ import { DemoBar } from './components/DemoBar'
 import { InfoCard, type Selection } from './components/InfoCard'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
+import { ScenarioStrip } from './components/ScenarioStrip'
 import { SummaryCards } from './components/SummaryCards'
 import { Timeline } from './components/Timeline'
 import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
 import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
-import { snapToRail } from './lib/geo'
+import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
 import { PlanningTab } from './tabs/PlanningTab'
 import type { BlockFrequency, BlockGeoCollection, RailCollection } from './types'
@@ -117,6 +118,9 @@ export default function App() {
     return () => window.clearTimeout(id)
   }, [pickHint, rail])
 
+  const railName = useMemo(() => (rail ? nearestRailName(rail, params.release_lon, params.release_lat) : null), [rail, params.release_lon, params.release_lat])
+  const place = nearLandmark(params.release_lon, params.release_lat)
+
   const [srcLabel, srcTone] = SOURCE_LABEL[source] ?? ['', '']
 
   return (
@@ -188,8 +192,11 @@ export default function App() {
             autoRun={autoRun}
             setAutoRun={setAutoRun}
             pickHint={pickHint}
+            railName={railName}
+            place={place}
           />
           <div className="overlay-top">
+            <ScenarioStrip params={params} railName={railName} place={place} />
             <SummaryCards summary={result?.summary ?? null} loading={loading} />
             {error && (
               <div className="error-box" role="alert">
