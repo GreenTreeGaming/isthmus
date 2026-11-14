@@ -57,19 +57,24 @@ class Hazard:
                 shapely.transform(self.protect, f, interleaved=False).wkt)
 
 
-def erg_distances(net: Network, chemical: str, spill_size: str, time_of_day: str) -> tuple[float, float]:
+def erg_distances(net: Network, chemical: str, spill_size: str, time_of_day: str,
+                  wind_speed_mps: float = 0.0) -> tuple[float, float]:
+    """(isolation_m, protect_m). Low-wind values from the silver table (or ERG fallback), then large spills are
+    scaled to the ERG Table 3 wind band, so stronger wind → shorter protective distance."""
     tod = "night" if time_of_day == "night" else "day"
     key = (chemical, spill_size, tod)
     if key in net.erg:
-        return net.erg[key]
-    if key in A.ERG_FALLBACK:
-        return A.ERG_FALLBACK[key]
-    raise KeyError(f"no ERG distances for {key}")
+        iso, prot = net.erg[key]
+    elif key in A.ERG_FALLBACK:
+        iso, prot = A.ERG_FALLBACK[key]
+    else:
+        raise KeyError(f"no ERG distances for {key}")
+    return iso, prot * A.erg_wind_factor(chemical, spill_size, tod, wind_speed_mps)
 
 
 def build_hazard(net: Network, release_lon: float, release_lat: float, chemical: str, spill_size: str,
                  time_of_day: str, wind_from_deg: float, wind_speed_mps: float) -> Hazard:
-    iso_m, prot_m = erg_distances(net, chemical, spill_size, time_of_day)
+    iso_m, prot_m = erg_distances(net, chemical, spill_size, time_of_day, wind_speed_mps)
     rx, ry = to_metric(release_lon, release_lat)
     toward = math.radians((wind_from_deg + 180.0) % 360.0)   # meteorological FROM → travel direction
     ux, uy = math.sin(toward), math.cos(toward)               # 0° = north, clockwise

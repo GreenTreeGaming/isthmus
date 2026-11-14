@@ -14,16 +14,16 @@ def _hz(net, wind_from=270.0, speed=4.0, size="large"):
 
 def test_zone_points_downwind(net):
     hz = _hz(net, wind_from=270.0)        # wind FROM the west → gas goes east
-    east = (hz.rx + 1000, hz.ry)
-    west = (hz.rx - 1000, hz.ry)
+    east = (hz.rx + 700, hz.ry)
+    west = (hz.rx - 700, hz.ry)
     assert hz.in_zone(*east)
     assert not hz.in_zone(*west)
 
 
 def test_wind_from_north_goes_south(net):
     hz = _hz(net, wind_from=0.0)
-    assert hz.in_zone(hz.rx, hz.ry - 1000)
-    assert not hz.in_zone(hz.rx, hz.ry + 1000)
+    assert hz.in_zone(hz.rx, hz.ry - 700)
+    assert not hz.in_zone(hz.rx, hz.ry + 700)
 
 
 def test_isolation_circle_all_around(net):
@@ -85,3 +85,21 @@ def test_contraflow_raises_outbound_capacity(net):
     base = build_evac_graph(net, hz)
     cf = build_evac_graph(net, hz, contraflow=True)
     assert cf.cap_vph.max() > base.cap_vph.max()
+
+
+def test_erg_table3_wind_bands():
+    from engine import assumptions as A
+    MI = A.MI
+    # chlorine rail tank car, day: 6.0 / 3.9 / 3.2 mi at low / moderate / high wind
+    assert A.erg_wind_factor("chlorine", "large", "day", 1.5) == 1.0
+    assert abs(A.ERG_FALLBACK[("chlorine", "large", "day")][1] * A.erg_wind_factor("chlorine", "large", "day", 4.0) - 3.9 * MI) < 1e-6
+    assert abs(A.ERG_FALLBACK[("chlorine", "large", "day")][1] * A.erg_wind_factor("chlorine", "large", "day", 8.0) - 3.2 * MI) < 1e-6
+    assert A.erg_wind_factor("chlorine", "small", "day", 8.0) == 1.0     # Table 1 has no wind bands
+    assert A.erg_wind_band(2.0) == 0 and A.erg_wind_band(4.0) == 1 and A.erg_wind_band(6.0) == 2
+
+
+def test_stronger_wind_smaller_zone(net):
+    lon, lat = center_release()
+    calm = build_hazard(net, lon, lat, "chlorine", "large", "day", 270.0, 1.5)
+    windy = build_hazard(net, lon, lat, "chlorine", "large", "day", 270.0, 6.0)
+    assert windy.protect_m < calm.protect_m

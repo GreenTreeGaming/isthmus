@@ -18,7 +18,7 @@ def test_release_points_on_rail(net):
 
 def test_grid_size(net):
     g = scenario_grid(net, n_points=3, winds=(0, 90), times=("day", "night"))
-    assert len(g) == 3 * 2 * 2
+    assert len(g) == 3 * 2 * 2 * 3      # × 3 default wind speeds (ERG low/moderate/high)
     assert g["scenario_id"].is_unique
 
 

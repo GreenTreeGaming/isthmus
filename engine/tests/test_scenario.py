@@ -121,3 +121,27 @@ def test_fast_wind_more_sheltering(net):
     slow = run_scenario(_params(wind_speed_mps=0.6), net)
     fast = run_scenario(_params(wind_speed_mps=6.0), net)
     assert fast.summary.people_sheltering > slow.summary.people_sheltering
+
+
+def test_shelter_is_outside_danger_area(net):
+    import numpy as np
+    from engine.hazard import build_hazard
+    r = run_scenario(_params(), net)
+    p = r.params
+    hz = build_hazard(net, p.release_lon, p.release_lat, p.chemical, p.spill_size, p.time_of_day,
+                      p.wind_from_deg, p.wind_speed_mps)
+    d = net.depots.set_index("depot_id")
+    for b in r.buses:
+        sid = b.stops[-1]
+        if sid in d.index and d.at[sid, "kind"] == "shelter":
+            others = net.depots[net.depots["kind"] == "shelter"]
+            if (~hz.in_region(others["x"].to_numpy(), others["y"].to_numpy())).any():
+                assert not hz.in_region(d.at[sid, "x"], d.at[sid, "y"])
+
+
+def test_no_vehicles_assigned_to_undrivable_nodes(net):
+    """Regression: a walk-out block whose fractional car sat on a node with no drivable exit made flow infeasible."""
+    from engine.scenario import run_with_diagnostics
+    for wf in (0.0, 90.0, 180.0, 270.0):
+        r, d = run_with_diagnostics(_params(wind_from_deg=wf, wind_speed_mps=4.0), net)
+        assert r.summary.clearance_time_s >= 0

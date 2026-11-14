@@ -33,6 +33,7 @@ class SimResult:
     timeline: dict[int, list[float]] # arc -> demand/capacity per step
     step_s: float
     exited: float
+    queue_veh_min: np.ndarray | None = None   # per arc: vehicle-minutes spent waiting in its queue
 
 
 def simulate(cap_vph: np.ndarray, tt_s: np.ndarray, groups: list[Group],
@@ -67,6 +68,7 @@ def simulate(cap_vph: np.ndarray, tt_s: np.ndarray, groups: list[Group],
     peak = np.zeros(m)
     congested = np.full(m, np.nan)
     delay_sum = np.zeros(m)
+    queue_vm = np.zeros(m)
     delay_n = 0
     timeline: dict[int, list[float]] = {a: [] for a in used_arcs}
     exited, clearance = 0.0, 0.0
@@ -116,6 +118,7 @@ def simulate(cap_vph: np.ndarray, tt_s: np.ndarray, groups: list[Group],
                 peak[a] = ratio
             if ratio > 1.0 and np.isnan(congested[a]):
                 congested[a] = t
+            queue_vm[a] += waiting * step_s / 60.0
             if in_window and c > 0:
                 delay_sum[a] += waiting / (c / step_s)
 
@@ -125,4 +128,5 @@ def simulate(cap_vph: np.ndarray, tt_s: np.ndarray, groups: list[Group],
 
     mean_delay = delay_sum / max(delay_n, 1)
     return SimResult(clearance_s=clearance, peak_ratio=peak, congested_at_s=congested,
-                     mean_delay_s=mean_delay, timeline=timeline, step_s=step_s, exited=exited)
+                     mean_delay_s=mean_delay, timeline=timeline, step_s=step_s, exited=exited,
+                     queue_veh_min=queue_vm)

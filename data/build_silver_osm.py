@@ -38,9 +38,16 @@ PLACEHOLDER_DISABILITY = 0.10
 PLACEHOLDER_AGE65 = 0.10
 PLACEHOLDER_NURSING_RESIDENTS = 60
 PLACEHOLDER_HOSPITAL_RESIDENTS = 200
-PLACEHOLDER_DEPOTS = [
-    {"depot_id": "garage_test", "kind": "bus_garage", "name": "TEST garage (east)", "lon": -89.355, "lat": 43.095},
-    {"depot_id": "shelter_test", "kind": "shelter", "name": "TEST shelter (west)", "lon": -89.428, "lat": 43.075},
+# Bus garage: Madison Metro Transit, 1101 E Washington Ave (City of Madison). Shelters: CANDIDATE large public
+# facilities around the isthmus — not official city shelter designations. The engine picks, per scenario, the
+# closest candidate outside the danger zone. Coordinates: US Census geocoder.
+DEPOTS = [
+    {"depot_id": "metro_garage", "kind": "bus_garage", "name": "Madison Metro garage (1101 E Washington Ave)",
+     "lon": -89.36959, "lat": 43.08476},
+    {"depot_id": "shelter_alliant", "kind": "shelter", "name": "Alliant Energy Center", "lon": -89.38126, "lat": 43.04493},
+    {"depot_id": "shelter_truax", "kind": "shelter", "name": "Madison College Truax", "lon": -89.33035, "lat": 43.12021},
+    {"depot_id": "shelter_east_hs", "kind": "shelter", "name": "Madison East High School", "lon": -89.35387, "lat": 43.09651},
+    {"depot_id": "shelter_west_hs", "kind": "shelter", "name": "Madison West High School", "lon": -89.42566, "lat": 43.06819},
 ]
 # --------------------------------------------------------------------------------------------------------
 
@@ -337,8 +344,8 @@ def main(out_dir: str) -> None:
                    ignore_index=True)
     pk.astype({"node_id": "int64"}).to_parquet(out / "pickup_points.parquet", index=False)
 
-    # ---- depots (PLACEHOLDER locations)
-    dep = pd.DataFrame(PLACEHOLDER_DEPOTS)
+    # ---- depots: real Metro garage + candidate shelters
+    dep = pd.DataFrame(DEPOTS)
     dep["node_id"] = nearest(dep["lon"], dep["lat"])
     dep[["depot_id", "kind", "name", "node_id", "lon", "lat"]].to_parquet(out / "depots.parquet", index=False)
 
@@ -349,7 +356,7 @@ def main(out_dir: str) -> None:
                       "name": rails["name"] if "name" in rails else None},
                      geometry=rails.geometry.values, crs=4326).to_parquet(out / "rail_lines.parquet", index=False)
 
-    # ---- ERG distances: PLACEHOLDER copy of the engine's fallback — replace with real ERG Table 1 values
+    # ---- ERG 2024 distances (Table 1 small spills; Table 3 rail tank car, low wind — engine scales by wind band)
     sys.path.insert(0, str(REPO))
     from engine.assumptions import ERG_FALLBACK
     pd.DataFrame([{"chemical": c, "spill_size": s, "time_of_day": t, "isolation_m": float(i), "protect_m": float(p)}
@@ -360,7 +367,7 @@ def main(out_dir: str) -> None:
     print(f"missing lanes {int(road_edges.lanes.isna().sum())}, missing speed {int(road_edges.speed_kph.isna().sum())}"
           f" of {len(road_edges)} edges (engine fills by road class)")
     print("REAL:", ", ".join(used))
-    todo = (["ACS shares"] if not key else []) + ["hospital occupancy", "depots", "ERG table"]
+    todo = (["ACS shares"] if not key else []) + ["hospital occupancy"]
     print("PLACEHOLDERS still in use:", ", ".join(todo))
 
 

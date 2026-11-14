@@ -33,6 +33,7 @@ class Diagnostics:
     unreachable_nodes: int = 0
     vehicles: int = 0
     timings_ms: dict[str, float] = field(default_factory=dict)
+    jam_edge_ids: list[int] = field(default_factory=list)   # top roads by queued vehicle-minutes (where traffic jams)
 
 
 def run_scenario(params: ScenarioParams, network: Network) -> ScenarioResult:
@@ -99,6 +100,9 @@ def run_with_diagnostics(params: ScenarioParams, net: Network) -> tuple[Scenario
     groups = [Group(p.arcs, p.vehicles, departure_s(waves.get(p.origin, 0))) for p in flow.paths]
     sim = simulate(eg.cap_vph, eg.tt_s, groups)
     diag.sim_clearance_s = sim.clearance_s
+    if sim.queue_veh_min is not None:
+        top = np.argsort(-sim.queue_veh_min)[: A.JAM_TOP_N]
+        diag.jam_edge_ids = [int(eg.edge_id[a]) for a in top if sim.queue_veh_min[a] >= A.JAM_MIN_VEH_MIN]
     mark("sim")
 
     # ---- buses
@@ -169,7 +173,10 @@ def _plan(eg: EvacGraph, pop: pd.DataFrame, decision: np.ndarray, arrival: np.nd
     df = pd.DataFrame({"node_id": pop["node_id"], "veh": pop["vehicles"] * compliance, "arr": arrival})[evac]
     df = df[df["node_id"].isin(eg.index.keys())]
     grouped = df.groupby("node_id").agg(veh=("veh", "sum"), arr=("arr", "min"))
-    supply = {eg.index[int(n)]: int(math.ceil(v - 1e-9)) for n, v in grouped["veh"].items() if v > 0}
+    # Only nodes with a driving route out get vehicles. (A block can evacuate on foot while a fraction of a
+    # car rounds up to 1 at a node with no drivable exit — those occupants walk out instead.)
+    supply = {eg.index[int(n)]: int(math.ceil(v - 1e-9)) for n, v in grouped["veh"].items()
+              if v > 0 and np.isfinite(ff_node[eg.index[int(n)]])}
     flow = solve_flow(eg.n, eg.tails, eg.heads, eg.cap_vph, eg.cost_s, eg.tt_s, eg.exits, supply)
 
     exits = set(eg.exits)
@@ -259,7 +266,19 @@ def _depots(net: Network, hz: Hazard, eg: EvacGraph) -> tuple[tuple[str, int], t
             return str(r["depot_id"]), int(r["node_id"])
         return fallback
 
-    return pick("bus_garage"), pick("shelter")
+    def pick_shelter():
+        """Closest candidate shelter outside the danger area (zone + exit buffer); else the farthest one."""
+        rows = d[d["kind"] == "shelter"] if not d.empty else d
+        if not len(rows):
+            return fallback
+        x, y = rows["x"].to_numpy(float), rows["y"].to_numpy(float)
+        dist = hz.distance(x, y)
+        safe = ~hz.in_region(x, y)
+        i = int(np.argmin(np.where(safe, dist, np.inf))) if safe.any() else int(np.argmax(dist))
+        r = rows.iloc[i]
+        return str(r["depot_id"]), int(r["node_id"])
+
+    return pick("bus_garage"), pick_shelter()
 
 
 def _xy(net: Network, n: int):

@@ -45,7 +45,8 @@ RESULT_SCHEMA = (
     "clearance_time_s double, sim_clearance_s double, people_evacuating double, people_sheltering double, "
     "need_bus_total double, need_bus_unserved double, vehicles long, n_evacuate long, n_shelter long, "
     "runtime_ms double, error string, "
-    "bottleneck_edge_ids string, shelter_block_ids string, evacuate_block_ids string, facilities_in_zone string"
+    "bottleneck_edge_ids string, shelter_block_ids string, evacuate_block_ids string, facilities_in_zone string, "
+    "garage_in_zone boolean, jam_edge_ids string"
 )
 
 
@@ -85,7 +86,7 @@ def release_points(net: Network, n: int, max_from_center_m: float | None = None)
 
 def scenario_grid(net: Network, n_points: int = 10,
                   winds: tuple[float, ...] = tuple(range(0, 360, 45)),
-                  wind_speeds: tuple[float, ...] = (1.5,),
+                  wind_speeds: tuple[float, ...] = (1.5, 4.0, 7.0),   # ERG low / moderate / high wind bands
                   times: tuple[str, ...] = ("night", "day", "gameday"),
                   compliances: tuple[float, ...] = (0.85,),
                   chemicals: tuple[str, ...] = ("chlorine",),
@@ -140,16 +141,18 @@ def run_row(row, net: Network, bus_time_limit_s: float = 0.3) -> dict:
                   "need_bus_total", "need_bus_unserved", "runtime_ms"):
             out[k] = math.nan
         out.update(vehicles=0, n_evacuate=0, n_shelter=0, bottleneck_edge_ids="[]", shelter_block_ids="[]",
-                   evacuate_block_ids="[]", facilities_in_zone="[]")
+                   evacuate_block_ids="[]", facilities_in_zone="[]", garage_in_zone=None, jam_edge_ids="[]")
         return out
     s = r.summary
+    from engine.hazard import build_hazard
+    hz = build_hazard(net, p.release_lon, p.release_lat, p.chemical, p.spill_size, p.time_of_day,
+                      p.wind_from_deg, p.wind_speed_mps)
     hz_fac = []
     if not net.facilities.empty:
-        from engine.hazard import build_hazard
-        hz = build_hazard(net, p.release_lon, p.release_lat, p.chemical, p.spill_size, p.time_of_day,
-                          p.wind_from_deg, p.wind_speed_mps)
         inside = hz.in_zone(net.facilities["x"].to_numpy(), net.facilities["y"].to_numpy())
         hz_fac = net.facilities.loc[inside, "facility_id"].astype(str).tolist()
+    garages = net.depots[net.depots["kind"] == "bus_garage"] if not net.depots.empty else net.depots
+    garage_in_zone = bool(hz.in_zone(garages["x"].to_numpy(), garages["y"].to_numpy()).any()) if len(garages) else None
     out.update(
         clearance_time_s=s.clearance_time_s, sim_clearance_s=d.sim_clearance_s,
         people_evacuating=s.people_evacuating, people_sheltering=s.people_sheltering,
@@ -161,6 +164,8 @@ def run_row(row, net: Network, bus_time_limit_s: float = 0.3) -> dict:
         shelter_block_ids=json.dumps([b.block_id for b in r.blocks if b.decision == "shelter"]),
         evacuate_block_ids=json.dumps([b.block_id for b in r.blocks if b.decision == "evacuate"]),
         facilities_in_zone=json.dumps(hz_fac),
+        garage_in_zone=garage_in_zone,
+        jam_edge_ids=json.dumps(d.jam_edge_ids),
     )
     return out
 
@@ -205,19 +210,25 @@ def gold_tables(results: pd.DataFrame, net: Network, top_n: int = 10) -> dict:
     edge_meta = {d["edge_id"]: (d.get("name"), d["road_class"]) for _, _, d in net.G.edges(data=True)}
 
     # bottlenecks by road name (a road is many edges); keep the most frequent edge for map highlighting
-    road_scen: Counter = Counter()
-    road_edge: dict[str, Counter] = defaultdict(Counter)
-    for ids in ok["bottleneck_edge_ids"]:
-        seen = set()
-        for e in json.loads(ids):
-            name, cls = edge_meta.get(e, (None, "road"))
-            key = name or f"Unnamed {cls}"
-            road_edge[key][e] += 1
-            seen.add(key)
-        road_scen.update(seen)
-    top_bottlenecks = [{"edge_id": int(road_edge[k].most_common(1)[0][0]), "name": k, "times_bottleneck": int(c),
-                        "share": round(c / n, 3) if n else 0.0}
-                       for k, c in road_scen.most_common(top_n)]
+    def by_road(col: str):
+        scen: Counter = Counter()
+        per_edge: dict[str, Counter] = defaultdict(Counter)
+        for ids in ok[col]:
+            seen = set()
+            for e in json.loads(ids):
+                name, cls = edge_meta.get(e, (None, "road"))
+                key = name or f"Unnamed {cls}"
+                per_edge[key][e] += 1
+                seen.add(key)
+            scen.update(seen)
+        return [{"edge_id": int(per_edge[k].most_common(1)[0][0]), "name": k, "times_bottleneck": int(c),
+                 "share": round(c / n, 3) if n else 0.0} for k, c in scen.most_common(top_n)]
+
+    jam_col = "jam_edge_ids" if "jam_edge_ids" in ok and ok["jam_edge_ids"].map(lambda s: s != "[]").any() \
+        else "bottleneck_edge_ids"
+    top_bottlenecks = by_road(jam_col)
+    binding_limits = by_road("bottleneck_edge_ids")
+
 
     fac_count: Counter = Counter()
     for ids in ok["facilities_in_zone"]:
@@ -234,6 +245,9 @@ def gold_tables(results: pd.DataFrame, net: Network, top_n: int = 10) -> dict:
                    "mean_unserved": round(float(r.mean_unserved), 1), "n": int(r.n)}
                   for r in ww.sort_values("mean_clearance_s", ascending=False).itertuples()]
 
+    by_speed = ok.groupby("wind_speed_mps").agg(mean_clearance_s=("sim_clearance_s", "mean"),
+                                                mean_evacuating=("people_evacuating", "mean"),
+                                                mean_sheltering=("people_sheltering", "mean")).round(1).reset_index()
     by_time = ok.groupby("time_of_day").agg(mean_clearance_s=("sim_clearance_s", "mean"),
                                             mean_evacuating=("people_evacuating", "mean"),
                                             mean_sheltering=("people_sheltering", "mean"),
@@ -250,8 +264,13 @@ def gold_tables(results: pd.DataFrame, net: Network, top_n: int = 10) -> dict:
     insights = {
         "source": "gold", "n_scenarios": int(n), "n_failed": int(len(results) - n),
         "top_bottlenecks": top_bottlenecks, "facilities_in_zone": facilities_in_zone, "worst_wind": worst_wind,
+        "bottleneck_method": "roads with the most queued vehicle-minutes in the traffic sim (top 5 per scenario)",
+        "binding_limits": binding_limits,
         "by_time_of_day": by_time.to_dict("records"),
+        "by_wind_speed": by_speed.to_dict("records"),
         "median_runtime_ms": float(ok["runtime_ms"].median()) if n else None,
+        "garage_in_zone_share": (round(float(ok["garage_in_zone"].dropna().astype(bool).mean()), 3)
+                                 if "garage_in_zone" in ok and ok["garage_in_zone"].notna().any() else None),
     }
     return {"insights": insights, "block_frequency": block_freq}
 
@@ -269,13 +288,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run a scenario grid locally and write gold JSON.")
     ap.add_argument("data_dir")
     ap.add_argument("--n-points", type=int, default=8)
-    ap.add_argument("--wind-speed", type=float, default=1.5)
+    ap.add_argument("--wind-speeds", type=float, nargs="+", default=[1.5, 4.0, 7.0])
     ap.add_argument("--workers", type=int, default=None)
     ap.add_argument("--out", default="data/gold")
     ap.add_argument("--results", default=None, help="optional parquet path for raw per-scenario results")
     a = ap.parse_args()
     net = load_network(a.data_dir)
-    grid = scenario_grid(net, n_points=a.n_points, wind_speeds=(a.wind_speed,))
+    grid = scenario_grid(net, n_points=a.n_points, wind_speeds=tuple(a.wind_speeds))
     print(f"running {len(grid)} scenarios …")
     t0 = time.time()
     res = run_local(grid, a.data_dir, a.workers)

@@ -69,6 +69,8 @@ MAX_CLEARANCE_S = 48 * 3600       # binary-search ceiling
 CLEARANCE_TOLERANCE_S = 30        # binary-search precision
 ROUTING_SLACK_FACTORS = (1.0, 1.1, 1.25, 1.5, 2.0, 3.0)  # route at T*×f, keep f minimizing T + longest route
 DECISION_REFINE_ITERS = 2         # re-check evacuate/shelter after waves are assigned
+JAM_TOP_N = 5                     # per scenario, the roads with the most queued vehicle-minutes = "where it jams"
+JAM_MIN_VEH_MIN = 30.0            # ignore trivial queues
 
 # --------------------------------------------------------------------------- hazard
 EXIT_BUFFER_M = 300               # safe exits sit this far beyond the protective zone
@@ -76,19 +78,48 @@ AWAY_TOLERANCE_M = 25             # an edge counts as "away" unless it gets this
 HAZARD_COST_MULT = 5.0            # routing cost multiplier for edges inside the zone
 TOWARD_COST_MULT = 20.0           # fallback: toward-release edges, only if a node has no other way out
 
-# ERG Table 1 style distances, used only if the erg_distances table is missing.
-# APPROXIMATE — verify against the current DOT Emergency Response Guidebook before the demo.
-# key: (chemical, spill_size, day|night) -> (isolation_m, protect_m)
-ERG_FALLBACK: dict[tuple[str, str, str], tuple[float, float]] = {
-    ("chlorine", "small", "day"): (60, 300),
-    ("chlorine", "small", "night"): (60, 1100),
-    ("chlorine", "large", "day"): (500, 3000),
-    ("chlorine", "large", "night"): (500, 7900),
-    ("ammonia", "small", "day"): (30, 100),
-    ("ammonia", "small", "night"): (30, 200),
-    ("ammonia", "large", "day"): (150, 800),
-    ("ammonia", "large", "night"): (150, 2300),
+# DOT Emergency Response Guidebook (ERG) 2024, as published on NOAA CAMEO Chemicals
+# (cameochemicals.noaa.gov/unna/1017 chlorine, /unna/1005 anhydrous ammonia).
+# Small spills: Table 1. Large spills: Table 3, RAIL TANK CAR row (our scenario is a derailment).
+# Table 3 distances depend on wind: low < 6 mph, moderate 6–12 mph, high > 12 mph.
+FT, MI = 0.3048, 1609.344
+ERG_TABLE1_SMALL: dict[tuple[str, str], tuple[float, float]] = {   # (chem, day|night) -> (isolate_m, protect_m)
+    ("chlorine", "day"): (200 * FT, 0.2 * MI),
+    ("chlorine", "night"): (200 * FT, 0.9 * MI),
+    ("ammonia", "day"): (100 * FT, 0.1 * MI),
+    ("ammonia", "night"): (100 * FT, 0.1 * MI),
 }
+ERG_TABLE3_RAIL: dict[tuple[str, str], tuple[float, tuple[float, float, float]]] = {
+    # (chem, day|night) -> (isolate_m, (protect_m at low, moderate, high wind))
+    ("chlorine", "day"): (3000 * FT, (6.0 * MI, 3.9 * MI, 3.2 * MI)),
+    ("chlorine", "night"): (3000 * FT, (7.0 * MI, 5.6 * MI, 4.1 * MI)),   # ERG prints "7.0+" (can be larger)
+    ("ammonia", "day"): (1000 * FT, (1.0 * MI, 0.8 * MI, 0.6 * MI)),
+    ("ammonia", "night"): (1000 * FT, (2.6 * MI, 1.3 * MI, 0.8 * MI)),
+}
+ERG_WIND_BANDS_MPS = (6 * MI / 3600, 12 * MI / 3600)   # 2.68 m/s, 5.36 m/s
+
+# Low-wind values per (chemical, spill_size, day|night). This is what the silver erg_distances table holds;
+# the engine then scales large spills by wind band (erg_wind_factor) to reproduce Table 3 exactly.
+ERG_FALLBACK: dict[tuple[str, str, str], tuple[float, float]] = {
+    **{(c, "small", t): v for (c, t), v in ERG_TABLE1_SMALL.items()},
+    **{(c, "large", t): (iso, prot[0]) for (c, t), (iso, prot) in ERG_TABLE3_RAIL.items()},
+}
+
+
+def erg_wind_band(wind_speed_mps: float) -> int:
+    """0 = low (< 6 mph), 1 = moderate (6–12 mph), 2 = high (> 12 mph)."""
+    lo, hi = ERG_WIND_BANDS_MPS
+    return 0 if wind_speed_mps < lo else (1 if wind_speed_mps <= hi else 2)
+
+
+def erg_wind_factor(chemical: str, spill_size: str, day_night: str, wind_speed_mps: float) -> float:
+    """Protective distance at this wind ÷ low-wind distance (Table 3). 1.0 for small spills (Table 1)."""
+    row = ERG_TABLE3_RAIL.get((chemical, day_night)) if spill_size == "large" else None
+    if row is None:
+        return 1.0
+    prot = row[1]
+    return prot[erg_wind_band(wind_speed_mps)] / prot[0]
+
 
 # --------------------------------------------------------------------------- buses
 BUS_DISPATCH_DELAY_S = 600        # alert → buses leave the garage (find drivers)
