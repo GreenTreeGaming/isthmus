@@ -278,7 +278,18 @@ export default function App() {
             />
           )}
         </div>
-        {tab === 'planning' && <div className="view"><PlanningTab /></div>}
+        {tab === 'planning' && (
+          <div className="view">
+            <PlanningTab
+              frequencyReady={frequency != null}
+              onShowFrequency={() => {
+                setToggles((t) => ({ ...t, frequency: true, blocks: true }))
+                setSelection(null)
+                setTab('live')
+              }}
+            />
+          </div>
+        )}
         {tab === 'assumptions' && <div className="view"><AssumptionsTab /></div>}
       </main>
     </div>

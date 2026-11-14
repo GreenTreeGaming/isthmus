@@ -28,7 +28,14 @@ function ChartCard({ title, sub, children }: { title: string; sub: string; child
   )
 }
 
-export function PlanningTab() {
+interface Finding {
+  big: string
+  title: React.ReactNode
+  detail: string
+  tone: 'warn' | 'info' | 'bad'
+}
+
+export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequency: () => void; frequencyReady: boolean }) {
   const [data, setData] = useState<Insights | null>(null)
   const [source, setSource] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -61,14 +68,57 @@ export function PlanningTab() {
     .sort((a, b) => TOD_ORDER.indexOf(a.time_of_day) - TOD_ORDER.indexOf(b.time_of_day))
     .map((t) => ({ ...t, label: TOD_LABEL[t.time_of_day] ?? t.time_of_day, clearance_min: Math.round(t.mean_clearance_s / 60) }))
 
+  // Headline findings, written as sentences a judge can read in seconds.
+  const findings: Finding[] = []
+  const fac = facilities[0]
+  if (fac)
+    findings.push({
+      big: fmtPct(fac.share),
+      title: <><b>{fac.name}</b> is inside the danger zone in {fmtPct(fac.share)} of scenarios</>,
+      detail: `${FACILITY_LABEL[fac.type] ?? 'Facility'} residents need help to leave, so this site needs a standing shelter-in-place plan.`,
+      tone: 'bad',
+    })
+  if (byTime.length > 1) {
+    const slow = [...byTime].sort((a, b) => b.mean_clearance_s - a.mean_clearance_s)
+    const [worstT, bestT] = [slow[0], slow[slow.length - 1]]
+    findings.push({
+      big: `${worstT.clearance_min} min`,
+      title: <><b>{worstT.label}</b> takes longest to get everyone out</>,
+      detail: `${worstT.clearance_min} min on average, vs. ${bestT.clearance_min} min for ${bestT.label.toLowerCase()}.`,
+      tone: 'warn',
+    })
+  }
+  const topB = bottlenecks[0]
+  if (topB)
+    findings.push(
+      topB.share < 0.25
+        ? {
+            big: fmtPct(topB.share),
+            title: <>No single road is always the bottleneck — <b>plans must adapt</b></>,
+            detail: `The most frequent, ${topB.name}, is the choke point in only ${fmtPct(topB.share)} of scenarios. It depends on where the train derails and where the wind blows.`,
+            tone: 'info',
+          }
+        : {
+            big: fmtPct(topB.share),
+            title: <><b>{topB.name}</b> is the choke point in {fmtPct(topB.share)} of scenarios</>,
+            detail: 'Fixing this one road would help in most derailments.',
+            tone: 'warn',
+          },
+    )
+  if (worst)
+    findings.push({
+      big: `${Math.round(worst.mean_clearance_s / 60)} min`,
+      title: <>Wind from the <b>{worst.dir}</b> is the worst case</>,
+      detail: `${fmtDuration(worst.mean_clearance_s)} on average to get everyone out — the slowest of ${wind.length} wind directions.`,
+      tone: 'warn',
+    })
+
   return (
     <div className="page planning">
       <header className="page-head">
         <div>
-          <h2>Planning insights</h2>
-          <p className="muted">
-            Recurring choke points across {data.n_scenarios ? fmtInt(data.n_scenarios) : 'many'} simulated derailments — every rail location, wind direction, time of day and chemical.
-          </p>
+          <h2>What {data.n_scenarios ? fmtInt(data.n_scenarios) : 'hundreds of'} simulated derailments tell us</h2>
+          <p className="muted">Every rail location, wind direction, time of day and chemical, run as one batch. Findings first, charts below.</p>
           <div className="run-stats">
             {data.n_scenarios != null && <span><b>{fmtInt(data.n_scenarios)}</b> scenarios</span>}
             {data.n_failed != null && <span className={data.n_failed > 0 ? 'bad' : ''}><b>{fmtInt(data.n_failed)}</b> failed</span>}
@@ -78,26 +128,29 @@ export function PlanningTab() {
         {source === 'placeholder' && <span className="badge warn">Placeholder data — batch results pending</span>}
       </header>
 
-      {worst && (
-        <div className="hero-row">
-          <div className="hero">
-            <div className="card-label">Most-frequent bottleneck</div>
-            <div className="hero-value">{bottlenecks[0]?.name ?? '—'}</div>
-            <div className="muted">{bottlenecks[0] ? `${fmtPct(bottlenecks[0].share)} of scenarios` : ''}</div>
-          </div>
-          <div className="hero">
-            <div className="card-label">Worst wind direction</div>
-            <div className="hero-value">From {worst.dir}</div>
-            <div className="muted">{fmtDuration(worst.mean_clearance_s)} on average to get everyone out</div>
-          </div>
-          <div className="hero">
-            <div className="card-label">Facility most often inside the zone</div>
-            <div className="hero-value">{facilities[0]?.name ?? '—'}</div>
-            <div className="muted">{facilities[0] ? `${fmtPct(facilities[0].share)} of scenarios` : ''}</div>
-          </div>
-        </div>
-      )}
+      <div className="findings">
+        {findings.map((f, i) => (
+          <article key={i} className={`finding tone-${f.tone}`}>
+            <div className="finding-big">{f.big}</div>
+            <div>
+              <h3>{f.title}</h3>
+              <p>{f.detail}</p>
+            </div>
+          </article>
+        ))}
+      </div>
 
+      <div className="freq-cta">
+        <div>
+          <h3>Where is sheltering most often needed?</h3>
+          <p className="muted">Color every block by how often it is told to shelter in place across all {data.n_scenarios ? fmtInt(data.n_scenarios) : ''} scenarios.</p>
+        </div>
+        <button className="run" onClick={onShowFrequency} disabled={!frequencyReady} title={frequencyReady ? undefined : 'Needs data/gold/block_frequency.json'}>
+          Show shelter frequency on the map →
+        </button>
+      </div>
+
+      <h2 className="section-title">The data behind these findings</h2>
       <div className="chart-grid">
         <ChartCard title="Top bottleneck roads" sub="Share of scenarios where the road segment is in the network's minimum cut">
           <ResponsiveContainer width="100%" height={barH(bottlenecks.length)}>
