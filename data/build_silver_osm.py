@@ -28,7 +28,7 @@ import shapely
 
 REPO = Path(__file__).resolve().parents[1]
 CACHE = REPO / "cache" / "osm"
-BBOX = (-89.43, 43.05, -89.33, 43.10)          # west, south, east north — isthmus + downtown + Camp Randall
+BBOX = (-89.47, 43.015, -89.29, 43.125)        # west, south, east, north — isthmus + downtown + Camp Randall, out to the Beltline
 CAMP_RANDALL = (-89.4127, 43.0700)
 GAMEDAY_CROWD = 75_000
 

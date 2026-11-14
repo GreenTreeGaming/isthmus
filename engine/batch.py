@@ -90,13 +90,18 @@ def scenario_grid(net: Network, n_points: int = 10,
                   compliances: tuple[float, ...] = (0.85,),
                   chemicals: tuple[str, ...] = ("chlorine",),
                   spill_sizes: tuple[str, ...] = ("large",),
-                  random_closures: int = 0, seed: int = 0) -> pd.DataFrame:
-    """Cartesian grid of scenarios. Default: 10 points × 8 winds × 3 times = 240 scenarios."""
+                  random_closures: int = 0, seed: int = 0,
+                  max_from_center_m: float = 2500.0) -> pd.DataFrame:
+    """Cartesian grid of scenarios. Default: 10 points × 8 winds × 3 times = 240 scenarios.
+
+    Derailment points stay within max_from_center_m of the study-area center (the isthmus core),
+    even though the road network extends farther out so evacuees have real exits.
+    """
     rng = np.random.default_rng(seed)
     major = [d["edge_id"] for _, _, d in net.G.edges(data=True) if d["road_class"] in A.CONTRAFLOW_CLASSES]
     rows = []
     for sid, ((lon, lat), w, ws, tod, c, chem, size) in enumerate(itertools.product(
-            release_points(net, n_points), winds, wind_speeds, times, compliances, chemicals, spill_sizes)):
+            release_points(net, n_points, max_from_center_m), winds, wind_speeds, times, compliances, chemicals, spill_sizes)):
         closed = tuple(int(e) for e in rng.choice(major, size=min(random_closures, len(major)), replace=False)) \
             if random_closures and major else ()
         rows.append(dict(scenario_id=sid, release_lon=lon, release_lat=lat, chemical=chem, spill_size=size,
