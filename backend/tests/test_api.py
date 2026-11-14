@@ -53,6 +53,7 @@ def test_simulate_validates(client):
 
 
 def test_rail_and_insights(client):
+    assert client.get("/assumptions").json()["groups"]
     rail = client.get("/rail").json()
     assert rail["type"] == "FeatureCollection" and rail["features"]
     ins = client.get("/insights").json()

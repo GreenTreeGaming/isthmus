@@ -228,16 +228,21 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
         stops, arr, load, path = [GARAGE[0]], [0.0], [0], [list(GARAGE[1])]
         t, pos, onboard = 0.0, GARAGE[1], 0
         while queue and len(stops) < 4 and onboard < p.bus_capacity:
-            a, bid, x, y, n = queue[0]
+            j = 0
+            if len(stops) > 1:  # after the most urgent pickup, chain the nearest nearby ones
+                j = min(range(min(12, len(queue))), key=lambda k: dist_ll(pos, tuple(_ll(queue[k][2], queue[k][3]))))
+                if dist_ll(pos, tuple(_ll(queue[j][2], queue[j][3]))) > 700:
+                    break
+            a, bid, x, y, n = queue[j]
             ll = tuple(_ll(x, y))
             t += dist_ll(pos, ll) / bus_speed + 90
             take = min(n, p.bus_capacity - onboard)
             if t <= a:
                 served += take
             onboard += int(round(take))
-            queue[0][4] -= take
-            if queue[0][4] < 1:
-                queue.pop(0)
+            queue[j][4] -= take
+            if queue[j][4] < 1:
+                queue.pop(j)
             stops.append(f"stop_{bid[-5:]}")
             arr.append(round(t))
             load.append(onboard)

@@ -103,3 +103,19 @@ def rail(response: Response) -> dict[str, Any]:
         return json.loads(gpd.read_parquet(path).to_crs(4326).to_json())
     response.headers["X-Isthmus-Source"] = "placeholder"
     return _load_json(config.PLACEHOLDER_DIR / "rail.geojson")
+
+
+@app.get("/assumptions")
+def assumptions(response: Response) -> dict[str, Any]:
+    """Engine assumptions (engine/assumptions.py is the single source of truth); placeholder until it exists."""
+    base = _load_json(config.PLACEHOLDER_DIR / "assumptions.json")
+    base.pop("_comment", None)
+    try:
+        from engine import assumptions as a  # type: ignore[import-not-found]
+    except ImportError:
+        response.headers["X-Isthmus-Source"] = "placeholder"
+        return base
+    items = [{"name": k, "value": v if isinstance(v, (int, float, str, bool)) else json.dumps(v, default=str)}
+             for k, v in vars(a).items() if k.isupper()]
+    response.headers["X-Isthmus-Source"] = "engine"
+    return {**base, "source": "engine/assumptions.py", "groups": [{"title": "engine/assumptions.py", "items": items}]}

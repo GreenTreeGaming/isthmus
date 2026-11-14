@@ -1,0 +1,360 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import DeckGL, { type DeckGLRef } from '@deck.gl/react'
+import type { PickingInfo } from '@deck.gl/core'
+import { GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from '@deck.gl/layers'
+import { HeatmapLayer } from '@deck.gl/aggregation-layers'
+import { PathStyleExtension, type PathStyleExtensionProps } from '@deck.gl/extensions'
+import { Map } from 'react-map-gl/maplibre'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import '../lib/maplibreWorker'
+import type { BlockFeature, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse } from '../types'
+import { COLORS, blockColor, loadColor } from '../lib/colors'
+import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
+import { along, distM } from '../lib/geo'
+import { Tooltip, type HoverInfo } from './Tooltip'
+
+const INITIAL_VIEW = { longitude: -89.374, latitude: 43.075, zoom: 13.5, pitch: 0, bearing: 0 }
+const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+const MAX_PARTICLES = 4000
+
+export interface LayerToggles {
+  blocks: boolean
+  heatmap: boolean
+  roads: boolean
+  traffic: boolean
+  buses: boolean
+}
+
+interface Props {
+  result: ScenarioResponse | null
+  derived: Derived | null
+  rail: RailCollection | null
+  params: ScenarioParams
+  toggles: LayerToggles
+  time: number | null // null = peak view
+  onPickRelease: (lon: number, lat: number) => void
+  hoveredBus: number | null
+  setHoveredBus: (id: number | null) => void
+}
+
+interface Particle {
+  path: [number, number][]
+  lengthM: number
+  edge: EdgeFeature
+}
+
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus, setHoveredBus }: Props) {
+  const [hover, setHover] = useState<HoverInfo | null>(null)
+  const [phase, setPhase] = useState(0)
+  const raf = useRef(0)
+
+  // Continuous animation clock for traffic particles and the release pulse.
+  useEffect(() => {
+    const start = performance.now()
+    const tick = (now: number) => {
+      setPhase((now - start) / 1000)
+      raf.current = requestAnimationFrame(tick)
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [])
+
+  const edgeLoadNow = useMemo(() => {
+    const m = new globalThis.Map<number, number>()
+    if (!result) return m
+    for (const f of result.edges.features) {
+      const id = f.properties.edge_id
+      const v = time == null ? null : loadAt(result.timeline.edge_load[String(id)], time, result.timeline.step_s || 30)
+      m.set(id, v ?? (time == null ? f.properties.peak_load_ratio : 0))
+    }
+    return m
+  }, [result, time])
+
+  const particleEdges: Particle[] = useMemo(() => {
+    if (!result) return []
+    return result.edges.features.map((edge) => {
+      const path = edge.geometry.coordinates.map((c) => [c[0], c[1]] as [number, number])
+      let lengthM = 0
+      for (let i = 0; i < path.length - 1; i++) lengthM += distM(path[i], path[i + 1])
+      return { path, lengthM: Math.max(lengthM, 20), edge }
+    })
+  }, [result])
+
+  const particles = useMemo(() => {
+    if (!toggles.traffic || particleEdges.length === 0) return []
+    const out: { position: [number, number]; load: number }[] = []
+    const budget = MAX_PARTICLES / Math.max(1, particleEdges.length)
+    for (const p of particleEdges) {
+      const load = edgeLoadNow.get(p.edge.properties.edge_id) ?? 0
+      if (load < 0.03) continue
+      const n = Math.min(Math.ceil(budget), Math.max(1, Math.round(load * (p.lengthM / 60))))
+      const speedMps = 14 * Math.max(0.12, 1 - Math.min(load, 1.4) * 0.62) // congested roads crawl
+      const base = (phase * speedMps) / p.lengthM
+      for (let i = 0; i < n; i++) out.push({ position: along(p.path, (base + i / n) % 1), load })
+    }
+    return out
+  }, [particleEdges, edgeLoadNow, phase, toggles.traffic])
+
+  const buses = useMemo(() => result?.buses ?? [], [result])
+  const busNow = useMemo(() => {
+    if (time == null) return []
+    return buses
+      .map((b) => ({ bus: b, position: busPosition(b, time) }))
+      .filter((x): x is { bus: Bus; position: [number, number] } => x.position != null && time <= (x.bus.arrival_s.at(-1) ?? 0) + 120)
+  }, [buses, time])
+
+  const pulse = (phase % 2) / 2
+  const releasePos: [number, number] = [params.release_lon, params.release_lat]
+
+  const layers = [
+    toggles.heatmap &&
+      derived &&
+      new HeatmapLayer({
+        id: 'need-help-heat',
+        data: derived.blockPoints,
+        getPosition: (d) => d.position,
+        getWeight: (d) => Math.max(d.props.need_bus, 0) + d.props.vulnerability * 4,
+        radiusPixels: 55,
+        intensity: 1.2,
+        threshold: 0.04,
+        colorRange: [
+          [32, 18, 77],
+          [72, 30, 140],
+          [128, 50, 168],
+          [190, 70, 150],
+          [240, 110, 120],
+          [255, 190, 120],
+        ],
+        opacity: 0.75,
+      }),
+    toggles.blocks &&
+      result &&
+      new SolidPolygonLayer<BlockFeature>({
+        id: 'blocks',
+        data: result.blocks.features,
+        getPolygon: (f) => f.geometry.coordinates as [number, number][][],
+        getFillColor: (f) => blockColor(f.properties, toggles.heatmap ? 70 : 150),
+        pickable: true,
+        transitions: { getFillColor: 450 },
+        updateTriggers: { getFillColor: [toggles.heatmap] },
+      }),
+    toggles.blocks &&
+      result &&
+      new GeoJsonLayer({
+        id: 'block-outlines',
+        data: result.blocks,
+        filled: false,
+        stroked: true,
+        getLineColor: (f) => ((f.properties as { decision: string }).decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
+        lineWidthMinPixels: 0.6,
+      }),
+    result &&
+      new GeoJsonLayer({
+        id: 'zones',
+        data: result.zones,
+        filled: true,
+        stroked: true,
+        getFillColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 85 : 38],
+        getLineColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 255 : 200],
+        getLineWidth: 2,
+        lineWidthUnits: 'pixels',
+        getDashArray: (f: { properties: { kind: string } }) => ((f.properties as { kind: string }).kind === 'protect' ? [6, 4] : [0, 0]),
+        dashJustified: true,
+        extensions: [new PathStyleExtension({ dash: true })],
+        pickable: true,
+      }),
+    toggles.roads &&
+      result &&
+      new PathLayer<EdgeFeature>({
+        id: 'edges-glow',
+        data: result.edges.features.filter((f) => f.properties.is_bottleneck),
+        getPath: (f) => f.geometry.coordinates as [number, number][],
+        getColor: [255, 70, 70, 70],
+        getWidth: 22,
+        widthUnits: 'pixels',
+        capRounded: true,
+        jointRounded: true,
+      }),
+    toggles.roads &&
+      result &&
+      new PathLayer<EdgeFeature>({
+        id: 'edges',
+        data: result.edges.features,
+        getPath: (f) => f.geometry.coordinates as [number, number][],
+        getColor: (f) => loadColor(edgeLoadNow.get(f.properties.edge_id) ?? 0),
+        getWidth: (f) => (f.properties.is_bottleneck ? 8 : 3.5),
+        widthUnits: 'pixels',
+        widthMinPixels: 2,
+        capRounded: true,
+        jointRounded: true,
+        pickable: true,
+        updateTriggers: { getColor: [edgeLoadNow] },
+        transitions: { getColor: 250 },
+      }),
+    toggles.traffic &&
+      new ScatterplotLayer({
+        id: 'traffic',
+        data: particles,
+        getPosition: (d) => d.position,
+        getFillColor: (d) => (d.load > 1 ? [255, 235, 220, 230] : [235, 245, 255, 200]),
+        getRadius: 2.2,
+        radiusUnits: 'pixels',
+      }),
+    rail &&
+      new PathLayer({
+        id: 'rail',
+        data: rail.features,
+        getPath: (f) => f.geometry.coordinates as [number, number][],
+        getColor: hover?.layer === 'rail-hit' ? [230, 236, 245, 255] : [...COLORS.rail, 190],
+        getWidth: 2.5,
+        widthUnits: 'pixels',
+        getDashArray: [4, 2.5],
+        dashJustified: true,
+        extensions: [new PathStyleExtension({ dash: true })],
+        updateTriggers: { getColor: [hover?.layer] },
+      }),
+    rail &&
+      new PathLayer({
+        id: 'rail-hit',
+        data: rail.features,
+        getPath: (f) => f.geometry.coordinates as [number, number][],
+        getColor: [0, 0, 0, 0],
+        getWidth: 18,
+        widthUnits: 'pixels',
+        pickable: true,
+      }),
+    toggles.buses &&
+      new PathLayer<Bus, PathStyleExtensionProps<Bus>>({
+        id: 'bus-routes',
+        data: buses,
+        getPath: (b) => b.path,
+        getColor: (b) =>
+          hoveredBus == null ? [...COLORS.bus, 115] : b.bus_id === hoveredBus ? [140, 200, 255, 255] : [...COLORS.bus, 30],
+        getWidth: (b) => (b.bus_id === hoveredBus ? 5 : 2),
+        widthUnits: 'pixels',
+        getDashArray: [7, 3],
+        dashJustified: true,
+        extensions: [new PathStyleExtension({ dash: true })],
+        capRounded: true,
+        jointRounded: true,
+        pickable: true,
+        updateTriggers: { getColor: [hoveredBus], getWidth: [hoveredBus] },
+      }),
+    toggles.buses &&
+      derived &&
+      new ScatterplotLayer<BusStop>({
+        id: 'bus-stops',
+        data: derived.stops,
+        getPosition: (s) => s.position,
+        getFillColor: (s) =>
+          s.kind === 'garage' ? [40, 50, 66, 255] : s.kind === 'shelter' ? [...COLORS.onTime, 255] : s.late ? [...COLORS.late, 255] : [245, 248, 252, 255],
+        getLineColor: (s) => (s.kind === 'pickup' ? (s.late ? [255, 200, 200, 255] : [...COLORS.bus, 255]) : [230, 236, 245, 255]),
+        getRadius: (s) => (s.kind === 'pickup' ? 5 : 7),
+        radiusUnits: 'pixels',
+        stroked: true,
+        lineWidthMinPixels: 2,
+        pickable: true,
+        opacity: hoveredBus == null ? 1 : 0.9,
+      }),
+    toggles.buses &&
+      derived &&
+      new TextLayer<BusStop>({
+        id: 'stop-labels',
+        data: hoveredBus == null ? [] : derived.stops.filter((s) => s.kind === 'pickup' && s.deadline_s != null && s.bus_id === hoveredBus),
+        getPosition: (s) => s.position,
+        getText: (s) => `${s.late ? 'late · ' : ''}by ${Math.round((s.deadline_s ?? 0) / 60)} min`,
+        getSize: 11,
+        getColor: (s) => (s.late ? [255, 150, 150, 255] : [220, 230, 245, 255]),
+        getPixelOffset: [0, -14],
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontWeight: 600,
+        outlineWidth: 3,
+        outlineColor: [8, 10, 14, 255],
+        fontSettings: { sdf: true },
+      }),
+    toggles.buses &&
+      new ScatterplotLayer({
+        id: 'bus-vehicles',
+        data: busNow,
+        getPosition: (d) => d.position,
+        getFillColor: [140, 200, 255, 255],
+        getLineColor: [8, 10, 14, 255],
+        getRadius: 6,
+        radiusUnits: 'pixels',
+        stroked: true,
+        lineWidthMinPixels: 2,
+      }),
+    new ScatterplotLayer({
+      id: 'release-pulse',
+      data: [releasePos],
+      getPosition: (d) => d,
+      getFillColor: [239, 68, 68, Math.round(120 * (1 - pulse))],
+      getRadius: 8 + 30 * pulse,
+      radiusUnits: 'pixels',
+      updateTriggers: { getFillColor: [pulse], getRadius: [pulse] },
+    }),
+    new ScatterplotLayer({
+      id: 'release',
+      data: [releasePos],
+      getPosition: (d) => d,
+      getFillColor: [255, 255, 255, 255],
+      getLineColor: [239, 68, 68, 255],
+      getRadius: 6,
+      radiusUnits: 'pixels',
+      stroked: true,
+      lineWidthMinPixels: 4,
+    }),
+  ].filter(Boolean)
+
+  const onHover = (info: PickingInfo) => {
+    const id = info.layer?.id ?? null
+    if (!info.picked || !id) {
+      setHover(null)
+      if (hoveredBus != null) setHoveredBus(null)
+      return
+    }
+    setHover({ x: info.x, y: info.y, layer: id, object: info.object, coordinate: info.coordinate as [number, number] })
+    const busId = id === 'bus-routes' ? (info.object as Bus).bus_id : id === 'bus-stops' ? (info.object as BusStop).bus_id : null
+    if (busId !== hoveredBus) setHoveredBus(busId)
+  }
+
+  // Clicks are handled on the wrapper (not Deck's onClick) so a pan never counts as a click
+  // and placement works even where deck's tap recognizer is flaky.
+  const deckRef = useRef<DeckGLRef>(null)
+  const downAt = useRef<[number, number] | null>(null)
+  const onPointerDown = (e: React.PointerEvent) => {
+    downAt.current = [e.clientX, e.clientY]
+  }
+  const onPointerUp = (e: React.PointerEvent) => {
+    const start = downAt.current
+    downAt.current = null
+    const deck = deckRef.current?.deck
+    if (!start || !deck || e.button !== 0 || Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 5) return
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const picked = deck.pickObject({ x, y, radius: 6, layerIds: ['bus-routes', 'bus-stops'] })
+    if (picked) return
+    const viewport = deck.getViewports()[0]
+    if (!viewport) return
+    const [lon, lat] = viewport.unproject([x, y])
+    onPickRelease(lon, lat) // App snaps to the nearest rail line (or rejects if too far)
+  }
+
+  return (
+    <div className="map-wrap" onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+      <DeckGL
+        ref={deckRef}
+        initialViewState={INITIAL_VIEW}
+        controller={{ dragRotate: false }}
+        layers={layers}
+        onHover={onHover}
+        pickingRadius={6}
+        getCursor={({ isDragging }) => (isDragging ? 'grabbing' : hover?.layer === 'rail-hit' ? 'crosshair' : hover ? 'pointer' : 'grab')}
+      >
+        <Map mapStyle={BASEMAP} attributionControl={{ compact: true }} />
+      </DeckGL>
+      {hover && result && <Tooltip info={hover} result={result} derived={derived} edgeLoadNow={edgeLoadNow} time={time} />}
+    </div>
+  )
+}

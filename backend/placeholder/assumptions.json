@@ -1,0 +1,159 @@
+{
+ "_comment": "PLACEHOLDER until engine/assumptions.py exists; /assumptions then reads that module directly.",
+ "source": "placeholder",
+ "groups": [
+  {
+   "title": "Road capacity & speed",
+   "items": [
+    {
+     "name": "Per-lane capacity, motorway",
+     "value": 2000,
+     "unit": "veh/h/lane"
+    },
+    {
+     "name": "Per-lane capacity, arterial (primary/secondary)",
+     "value": 1800,
+     "unit": "veh/h/lane"
+    },
+    {
+     "name": "Per-lane capacity, local/residential",
+     "value": 900,
+     "unit": "veh/h/lane",
+     "note": "Signals and parking halve throughput downtown"
+    },
+    {
+     "name": "Contraflow capacity gain",
+     "value": "+50%",
+     "note": "Inbound lanes on designated arterials reversed outbound"
+    },
+    {
+     "name": "Missing speed limits",
+     "value": "filled by road class",
+     "note": "OSM maxspeed when tagged"
+    },
+    {
+     "name": "Simulation time step",
+     "value": 30,
+     "unit": "s"
+    }
+   ]
+  },
+  {
+   "title": "People & behavior",
+   "items": [
+    {
+     "name": "Compliance (default)",
+     "value": "85%",
+     "note": "Share of evacuate-zone residents who actually leave; adjustable 60\u2013100%"
+    },
+    {
+     "name": "Occupants per evacuating vehicle",
+     "value": 1.6,
+     "unit": "people/veh"
+    },
+    {
+     "name": "Walking speed",
+     "value": 1.2,
+     "unit": "m/s",
+     "note": "Slower for residents with limited mobility"
+    },
+    {
+     "name": "Mobilization delay",
+     "value": "5\u201310",
+     "unit": "min",
+     "note": "From alert to departure"
+    },
+    {
+     "name": "Who needs a bus",
+     "value": "zero-vehicle households + share of residents with a disability",
+     "note": "All nursing-home residents count as needing a bus"
+    }
+   ]
+  },
+  {
+   "title": "Buses",
+   "items": [
+    {
+     "name": "Fleet available (default)",
+     "value": 20,
+     "unit": "buses"
+    },
+    {
+     "name": "Seats per bus",
+     "value": 60
+    },
+    {
+     "name": "Bus speed in evacuation traffic",
+     "value": 7,
+     "unit": "m/s"
+    },
+    {
+     "name": "Dwell time per pickup",
+     "value": 90,
+     "unit": "s"
+    },
+    {
+     "name": "Pickup deadline",
+     "value": "plume arrival at the stop",
+     "note": "A pickup after the plume arrives counts as unserved"
+    }
+   ]
+  },
+  {
+   "title": "Hazard",
+   "items": [
+    {
+     "name": "Zone distances",
+     "value": "DOT ERG Table 1 (TIH)",
+     "note": "Isolation radius + downwind protective-action distance, by chemical, spill size, day/night"
+    },
+    {
+     "name": "Plume shape",
+     "value": "downwind corridor widening from the isolation circle"
+    },
+    {
+     "name": "Evacuate vs. shelter",
+     "value": "evacuate if people can be out before the plume arrives; otherwise shelter in place"
+    }
+   ]
+  }
+ ],
+ "data_sources": [
+  {
+   "name": "Road network",
+   "detail": "OpenStreetMap via OSMnx"
+  },
+  {
+   "name": "Population (night)",
+   "detail": "2020 Census blocks"
+  },
+  {
+   "name": "Population (day / game day)",
+   "detail": "LEHD LODES workplace flows + stadium crowd allocation"
+  },
+  {
+   "name": "Who may need help",
+   "detail": "ACS 5-year: B25044 (vehicles), B18101 (disability), B01001 (age 65+), at block-group level and spread to blocks"
+  },
+  {
+   "name": "Facilities",
+   "detail": "Nursing homes, hospitals, residence halls, stadium (public listings)"
+  },
+  {
+   "name": "Rail lines",
+   "detail": "OpenStreetMap railway=rail"
+  },
+  {
+   "name": "Hazard distances",
+   "detail": "US DOT Emergency Response Guidebook, Table 1"
+  }
+ ],
+ "limitations": [
+  "This is a planning tool, not a dispersion model. Zones follow ERG guidance, not a plume simulation; terrain, buildings and lake breeze are ignored.",
+  "Population is estimated per Census block. We show areas with the most residents who need help \u2014 never individuals or households.",
+  "Traffic is modeled as flow on a road network; signals, crashes and driver behavior are simplified.",
+  "Compliance and mobilization times are assumptions, not measurements.",
+  "Bus routing assumes every bus starts at the garage and is available immediately.",
+  "Results are only as good as OpenStreetMap and Census data for downtown Madison."
+ ]
+}
