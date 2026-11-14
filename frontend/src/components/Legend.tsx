@@ -5,6 +5,7 @@ interface Props {
   toggles: LayerToggles
   setToggle: (k: keyof LayerToggles, v: boolean) => void
   frequencyMax: number | null // null = no batch results yet
+  hidden?: boolean
 }
 
 const LAYERS: [keyof LayerToggles, string][] = [
@@ -16,9 +17,9 @@ const LAYERS: [keyof LayerToggles, string][] = [
   ['frequency', 'How often told to shelter'],
 ]
 
-export function Legend({ toggles, setToggle, frequencyMax }: Props) {
+export function Legend({ toggles, setToggle, frequencyMax, hidden }: Props) {
   return (
-    <div className="panel legend">
+    <div className={`panel legend ${hidden ? 'hidden' : ''}`}>
       <div className="legend-group">
         <div className="legend-item"><i className="sw" style={{ background: rgb(COLORS.shelter, 0.85) }} />Shelter in place</div>
         <div className="legend-item">

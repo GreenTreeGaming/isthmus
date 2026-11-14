@@ -11,7 +11,7 @@ export interface BusStop {
   stop_id: string
   index: number
   kind: 'garage' | 'pickup' | 'shelter'
-  position: [number, number]
+  position: [number, number] | null // null = stop location unknown (no marker)
   arrival_s: number
   load: number
   deadline_s: number | null
@@ -30,6 +30,19 @@ export interface Derived {
 
 /** Stop coordinates are only known when the path has exactly one vertex per stop (contract example + mock). */
 export const stopsLocatable = (b: Bus) => b.path.length === b.stops.length && b.path.length > 0
+
+function stopKind(id: string, i: number, n: number): BusStop['kind'] {
+  if (id.startsWith('garage') || id.startsWith('depot')) return 'garage'
+  if (id.startsWith('shelter')) return 'shelter'
+  if (id.startsWith('stop')) return 'pickup'
+  return i === 0 ? 'garage' : i === n - 1 ? 'shelter' : 'pickup'
+}
+
+function stopPosition(b: Bus, i: number): [number, number] | null {
+  const c = b.stop_coords?.[i]
+  if (c) return [c[0], c[1]]
+  return stopsLocatable(b) ? [b.path[i][0], b.path[i][1]] : null
+}
 
 export function outerRing(f: BlockGeoCollection['features'][number]) {
   return f.geometry.type === 'Polygon' ? f.geometry.coordinates[0] : f.geometry.coordinates[0][0]
@@ -50,12 +63,11 @@ export function derive(r: ScenarioResponse, geo: BlockGeoCollection): Derived {
   const stops: BusStop[] = []
   const busLate = new Map<number, number>()
   for (const b of r.buses) {
-    if (!stopsLocatable(b)) continue
     b.stops.forEach((id, i) => {
-      const kind: BusStop['kind'] = i === 0 ? 'garage' : i === b.stops.length - 1 ? 'shelter' : 'pickup'
-      const pos: [number, number] = [b.path[i][0], b.path[i][1]]
+      const kind = stopKind(id, i, b.stops.length)
+      const pos = stopPosition(b, i)
       let deadline: number | null = null
-      if (kind === 'pickup') {
+      if (kind === 'pickup' && pos) {
         // Pickup deadline = plume arrival at the nearest affected block (within 400 m).
         let best = 400
         for (const a of affected) {

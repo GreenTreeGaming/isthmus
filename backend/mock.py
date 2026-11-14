@@ -264,7 +264,8 @@ def run_mock(p: ScenarioParams) -> dict[str, Any]:
         arr.append(round(t))
         load.append(0)
         path.append(list(shelter[1]))
-        buses.append({"bus_id": bus_id, "stops": stops, "arrival_s": arr, "load": load, "path": path})
+        buses.append({"bus_id": bus_id, "stops": stops, "arrival_s": arr, "load": load, "path": path,
+                      "stop_coords": [list(c) for c in path]})
 
     return {
         "params": params_to_json(p),

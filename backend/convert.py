@@ -26,6 +26,7 @@ class Lookup:
     edge_geom: dict[int, list[list[float]]] = field(default_factory=dict)  # edge_id -> [[lon, lat], ...]
     edge_name: dict[int, str | None] = field(default_factory=dict)
     node_coord: dict[int, list[float]] = field(default_factory=dict)      # node_id -> [lon, lat]
+    stop_coord: dict[str, list[float]] = field(default_factory=dict)      # pickup/depot id -> [lon, lat]
 
 
 def vulnerability_index(zero_vehicle: float, disability: float, age65: float) -> float:
@@ -56,6 +57,14 @@ def load_lookup(data_dir: Path) -> Lookup:
 
     nodes = pd.read_parquet(data_dir / "road_nodes.parquet", columns=["node_id", "lon", "lat"])
     lk.node_coord = {int(n): [float(x), float(y)] for n, x, y in zip(nodes["node_id"], nodes["lon"], nodes["lat"])}
+
+    # Bus stop ids (pickup points + garages/shelters) -> coordinates, so the UI can place stop markers.
+    for name, id_col in (("pickup_points.parquet", "pickup_id"), ("depots.parquet", "depot_id")):
+        f = data_dir / name
+        if f.exists():
+            t = pd.read_parquet(f, columns=[id_col, "lon", "lat"])
+            lk.stop_coord.update({str(i): [round(float(x), 6), round(float(y), 6)]
+                                  for i, x, y in zip(t[id_col], t["lon"], t["lat"])})
     return lk
 
 
@@ -128,6 +137,8 @@ def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = 
         "arrival_s": [_num(t) for t in r.arrival_s],
         "load": [int(x) for x in r.load],
         "path": [lk.node_coord[n] for n in r.path_node_ids if n in lk.node_coord],
+        # Not in contracts/api_response.json yet: one [lon, lat] per stop (null if unknown).
+        "stop_coords": [lk.stop_coord.get(str(sid)) for sid in r.stops],
     } for r in result.buses]
 
     s = result.summary

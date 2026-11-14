@@ -59,6 +59,8 @@ export interface Bus {
   arrival_s: number[]
   load: number[]
   path: [number, number][]
+  /** Backend extra (not yet in contracts/): one [lon, lat] per stop, null where unknown. */
+  stop_coords?: ([number, number] | null)[]
 }
 
 export type BlockFeature = Feature<Polygon | MultiPolygon, BlockProps>

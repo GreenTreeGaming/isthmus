@@ -12,6 +12,7 @@ import { COLORS, blockColor, frequencyColor, loadColor } from '../lib/colors'
 import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
 import { along, distM } from '../lib/geo'
 import { Tooltip, type HoverInfo } from './Tooltip'
+import type { Selection } from './InfoCard'
 
 const INITIAL_VIEW = { longitude: -89.374, latitude: 43.075, zoom: 13.5, pitch: 0, bearing: 0 }
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
@@ -39,6 +40,8 @@ interface Props {
   blockGeo: BlockGeoCollection | null
   frequency: Map<string, BlockFrequency> | null
   frequencyMax: number
+  selection: Selection | null
+  onSelect: (s: Selection | null) => void
 }
 
 interface Particle {
@@ -47,7 +50,10 @@ interface Particle {
   edge: EdgeFeature
 }
 
-export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus, setHoveredBus, blockGeo, frequency, frequencyMax }: Props) {
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect }: Props) {
+  // A clicked bus stays highlighted like a hovered one.
+  const hoveredBus = hoverBus ?? (selection?.kind === 'bus' ? selection.id : null)
+  const selectedBlock = selection?.kind === 'block' ? selection.id : null
   const [hover, setHover] = useState<HoverInfo | null>(null)
   const [phase, setPhase] = useState(0)
   const raf = useRef(0)
@@ -144,6 +150,18 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         pickable: !toggles.frequency,
         transitions: { getFillColor: 450 },
         updateTriggers: { getFillColor: [toggles.heatmap, toggles.frequency] },
+      }),
+    derived &&
+      selectedBlock != null &&
+      new GeoJsonLayer<BlockFeature['properties']>({
+        id: 'block-selected',
+        data: derived.blockFeatures.filter((f) => f.properties.block_id === selectedBlock),
+        filled: true,
+        stroked: true,
+        getFillColor: [255, 255, 255, 40],
+        getLineColor: [255, 255, 255, 255],
+        getLineWidth: 3,
+        lineWidthUnits: 'pixels',
       }),
     toggles.frequency &&
       blockGeo &&
@@ -255,8 +273,8 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       derived &&
       new ScatterplotLayer<BusStop>({
         id: 'bus-stops',
-        data: derived.stops,
-        getPosition: (s) => s.position,
+        data: derived.stops.filter((s) => s.position != null),
+        getPosition: (s) => s.position!,
         getFillColor: (s) =>
           s.kind === 'garage' ? [40, 50, 66, 255] : s.kind === 'shelter' ? [...COLORS.onTime, 255] : s.late ? [...COLORS.late, 255] : [245, 248, 252, 255],
         getLineColor: (s) => (s.kind === 'pickup' ? (s.late ? [255, 200, 200, 255] : [...COLORS.bus, 255]) : [230, 236, 245, 255]),
@@ -271,8 +289,8 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       derived &&
       new TextLayer<BusStop>({
         id: 'stop-labels',
-        data: hoveredBus == null ? [] : derived.stops.filter((s) => s.kind === 'pickup' && s.deadline_s != null && s.bus_id === hoveredBus),
-        getPosition: (s) => s.position,
+        data: hoveredBus == null ? [] : derived.stops.filter((s) => s.position != null && s.kind === 'pickup' && s.deadline_s != null && s.bus_id === hoveredBus),
+        getPosition: (s) => s.position!,
         getText: (s) => `${s.late ? 'late · ' : ''}by ${Math.round((s.deadline_s ?? 0) / 60)} min`,
         getSize: 11,
         getColor: (s) => (s.late ? [255, 150, 150, 255] : [220, 230, 245, 255]),
@@ -344,8 +362,23 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
-    const picked = deck.pickObject({ x, y, radius: 6, layerIds: ['bus-routes', 'bus-stops'] })
-    if (picked) return
+    // 1) a bus route/stop opens its stop list; 2) the rail line moves the derailment;
+    // 3) a block inside the zone opens its "why"; 4) anywhere else moves the derailment to the nearest rail.
+    const top = deck.pickObject({ x, y, radius: 6, layerIds: ['bus-routes', 'bus-stops', 'rail-hit'] })
+    if (top?.layer?.id === 'bus-routes' || top?.layer?.id === 'bus-stops') {
+      const id = top.layer.id === 'bus-routes' ? (top.object as Bus).bus_id : (top.object as BusStop).bus_id
+      onSelect({ kind: 'bus', id })
+      return
+    }
+    if (!top && toggles.blocks && !toggles.frequency) {
+      const b = deck.pickObject({ x, y, radius: 0, layerIds: ['blocks'] })
+      const props = (b?.object as BlockFeature | undefined)?.properties
+      if (props && props.decision !== 'outside') {
+        onSelect({ kind: 'block', id: props.block_id })
+        return
+      }
+    }
+    onSelect(null)
     const viewport = deck.getViewports()[0]
     if (!viewport) return
     const [lon, lat] = viewport.unproject([x, y])

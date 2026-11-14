@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getBlockFrequency, getBlocks, getRail } from './api'
+import { getAssumptions, getBlockFrequency, getBlocks, getRail } from './api'
 import { ControlPanel } from './components/ControlPanel'
 import { DemoBar } from './components/DemoBar'
+import { InfoCard, type Selection } from './components/InfoCard'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
 import { SummaryCards } from './components/SummaryCards'
 import { Timeline } from './components/Timeline'
 import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
+import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
 import { snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
 import { PlanningTab } from './tabs/PlanningTab'
@@ -32,6 +34,8 @@ export default function App() {
   const [playing, setPlaying] = useState(false)
   const [hoveredBus, setHoveredBus] = useState<number | null>(null)
 
+  const [selection, setSelection] = useState<Selection | null>(null)
+  const [timing, setTiming] = useState<WaveTiming>(DEFAULT_TIMING)
   const [blockGeo, setBlockGeo] = useState<BlockGeoCollection | null>(null)
   const [frequency, setFrequency] = useState<{ map: Map<string, BlockFrequency>; max: number } | null>(null)
 
@@ -51,6 +55,16 @@ export default function App() {
     getBlocks()
       .then((r) => setBlockGeo(r.data))
       .catch(() => undefined) // surfaced via the simulate error banner
+    getAssumptions()
+      .then((r) => {
+        const items = r.data.groups.flatMap((g) => g.items)
+        const num = (k: string, d: number) => {
+          const v = items.find((it) => it.key === k)?.value
+          return typeof v === 'number' ? v : d
+        }
+        setTiming({ mobilization_s: num('MOBILIZATION_S', 300), wave_interval_s: num('WAVE_INTERVAL_S', 600) })
+      })
+      .catch(() => undefined)
     getBlockFrequency()
       .then((r) => {
         if (!r.data.length) return
@@ -157,6 +171,8 @@ export default function App() {
             blockGeo={blockGeo}
             frequency={frequency?.map ?? null}
             frequencyMax={frequency?.max ?? 1}
+            selection={selection}
+            onSelect={setSelection}
           />
           {loading && (
             <div className="sim-overlay" role="status" aria-live="polite">
@@ -182,7 +198,19 @@ export default function App() {
               </div>
             )}
           </div>
+          {selection && result && (
+            <InfoCard
+              selection={selection}
+              blocks={result.blocks}
+              buses={result.buses}
+              derived={derived}
+              timing={timing}
+              onClose={() => setSelection(null)}
+              onHoverBus={setHoveredBus}
+            />
+          )}
           <Legend
+            hidden={selection != null}
             toggles={toggles}
             setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))}
             frequencyMax={frequency ? frequency.max : null}

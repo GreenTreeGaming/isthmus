@@ -44,7 +44,7 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
         <h3>Release point</h3>
         <div className={`pick-hint ${pickHint ? 'warn' : ''}`}>
           <span className="pin-dot" />
-          {pickHint ?? 'Click a rail line on the map to place the derailment.'}
+          {pickHint ?? 'Click a rail line to place the derailment. Click a colored area or bus route to see why.'}
         </div>
         <div className="coords mono">
           {params.release_lat.toFixed(4)}°N, {Math.abs(params.release_lon).toFixed(4)}°W
