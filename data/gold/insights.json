@@ -4,12 +4,6 @@
  "n_failed": 0,
  "top_bottlenecks": [
   {
-   "edge_id": 9491,
-   "name": "Unnamed motorway_link",
-   "times_bottleneck": 119,
-   "share": 0.165
-  },
-  {
    "edge_id": 13371,
    "name": "Latitude 43 Street",
    "times_bottleneck": 100,
@@ -38,6 +32,12 @@
    "name": "Fish Hatchery Road",
    "times_bottleneck": 80,
    "share": 0.111
+  },
+  {
+   "edge_id": 9491,
+   "name": "Ramp near South Park Street",
+   "times_bottleneck": 63,
+   "share": 0.087
   },
   {
    "edge_id": 12804,

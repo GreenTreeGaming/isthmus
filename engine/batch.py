@@ -204,10 +204,35 @@ def run_local(grid: pd.DataFrame, data_dir: str, workers: int | None = None) -> 
 
 # --------------------------------------------------------------------------- gold
 
+def _nearby_name(net: Network, u: int, v: int, road_class: str) -> str | None:
+    """Unnamed OSM edges (often highway ramps) get a readable label from the nearest named road, 2 hops out."""
+    G = net.G
+    seen, frontier = {u, v}, [u, v]
+    for _ in range(2):
+        names = []
+        nxt = []
+        for n in frontier:
+            for a, b in list(G.in_edges(n)) + list(G.out_edges(n)):
+                nm = G.edges[a, b].get("name")
+                if nm:
+                    names.append(nm)
+                for m in (a, b):
+                    if m not in seen:
+                        seen.add(m)
+                        nxt.append(m)
+        if names:
+            best = Counter(names).most_common(1)[0][0]
+            kind = "Ramp" if road_class.endswith("_link") else "Road"
+            return f"{kind} near {best}"
+        frontier = nxt
+    return None
+
+
 def gold_tables(results: pd.DataFrame, net: Network, top_n: int = 10) -> dict:
     ok = results[results["error"].isna()] if "error" in results else results
     n = len(ok)
-    edge_meta = {d["edge_id"]: (d.get("name"), d["road_class"]) for _, _, d in net.G.edges(data=True)}
+    edge_meta = {d["edge_id"]: (d.get("name") or _nearby_name(net, u, v, d["road_class"]), d["road_class"])
+                 for u, v, d in net.G.edges(data=True)}
 
     # bottlenecks by road name (a road is many edges); keep the most frequent edge for map highlighting
     def by_road(col: str):
