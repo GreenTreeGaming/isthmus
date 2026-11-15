@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { DemoStep } from '../lib/demo'
+import type { Summary } from '../types'
 
 interface Props {
   steps: DemoStep[]
@@ -7,9 +8,12 @@ interface Props {
   onGo: (i: number) => void
   onExit: () => void
   loading: boolean
+  /** Current result and the pinned baseline; captions quote them once the step's run is back. */
+  summary: Summary | null
+  baseline: Summary | null
 }
 
-export function DemoBar({ steps, index, onGo, onExit, loading }: Props) {
+export function DemoBar({ steps, index, onGo, onExit, loading, summary, baseline }: Props) {
   const step = steps[index]
   const last = index === steps.length - 1
 
@@ -46,7 +50,8 @@ export function DemoBar({ steps, index, onGo, onExit, loading }: Props) {
         {step.title}
         {loading && <span className="spinner sm" />}
       </h2>
-      <p className="demo-caption">{step.caption}</p>
+      <p className="demo-caption">{!loading && summary && step.live ? step.live(summary, baseline) : step.caption}</p>
+      {step.try && <p className="demo-try"><b>Try:</b> {step.try}</p>}
       {step.compareLabel && <p className="demo-compare">Cards show the change from: <b>{step.compareLabel}</b></p>}
       <div className="demo-actions">
         <button className="ghost" onClick={() => onGo(index - 1)} disabled={index === 0}>

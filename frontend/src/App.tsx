@@ -311,7 +311,7 @@ export default function App() {
             setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))}
             frequencyMax={frequency ? frequency.max : null}
           />
-          {demo != null && <DemoBar steps={DEMO_STEPS} index={demo} onGo={goDemo} onExit={exitDemo} loading={loading} />}
+          {demo != null && <DemoBar steps={DEMO_STEPS} index={demo} onGo={goDemo} onExit={exitDemo} loading={loading} summary={result?.summary ?? null} baseline={pinned?.summary ?? null} />}
           {derived && (
             <Timeline
               time={timeInRange}

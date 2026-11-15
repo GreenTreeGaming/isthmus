@@ -598,3 +598,5 @@ input[type='range']:focus-visible { outline: 2px solid var(--blue); outline-offs
 @media (min-width: 1500px) { .findings { grid-template-columns: repeat(3, minmax(0, 1fr)); } .finding { flex-direction: column; gap: 10px; } }
 .finding-big { white-space: nowrap; }
 .robust-table thead th:first-child, .robust-table thead th:last-child, .robust-table tbody th { text-align: left; }
+.demo-try { margin: 0; font-size: 14.5px; color: var(--text-2); padding: 8px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.04); border: 1px dashed var(--border-strong); }
+.demo-try b { color: var(--accent-2); }
