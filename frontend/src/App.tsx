@@ -4,6 +4,7 @@ import { ControlPanel } from './components/ControlPanel'
 import { DemoBar } from './components/DemoBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { Toasts, type ToastMsg } from './components/Toast'
+import { Welcome } from './components/Welcome'
 import { InfoCard, type Selection } from './components/InfoCard'
 import { Legend } from './components/Legend'
 import { MapView, type LayerToggles } from './components/MapView'
@@ -15,11 +16,12 @@ import { derive } from './lib/derive'
 import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
 import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
+import { HowItWorksTab } from './tabs/HowItWorksTab'
 import { PlanningTab } from './tabs/PlanningTab'
 import type { BlockFrequency, BlockGeoCollection, RailCollection, ScenarioParams } from './types'
 import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
-type Tab = 'live' | 'planning' | 'assumptions'
+type Tab = 'live' | 'how' | 'planning' | 'assumptions'
 
 const SOURCE_LABEL: Record<string, [string, string]> = {
   placeholder: ['Placeholder data', 'warn'],
@@ -41,6 +43,23 @@ export default function App() {
   const [time, setTime] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [hoveredBus, setHoveredBus] = useState<number | null>(null)
+
+  // First visit: explain what this is (remembered per browser; storage may be unavailable).
+  const [welcome, setWelcome] = useState(() => {
+    try {
+      return localStorage.getItem('isthmus.welcomed') !== '1'
+    } catch {
+      return true
+    }
+  })
+  const closeWelcome = useCallback(() => {
+    setWelcome(false)
+    try {
+      localStorage.setItem('isthmus.welcomed', '1')
+    } catch {
+      /* private mode */
+    }
+  }, [])
 
   // Errors surface as toasts; the map and last good result stay on screen.
   const [staticError, setStaticError] = useState<string | null>(null)
@@ -185,6 +204,7 @@ export default function App() {
           {(
             [
               ['live', 'Live scenario'],
+              ['how', 'How it works'],
               ['planning', 'Planning'],
               ['assumptions', 'Assumptions'],
             ] as [Tab, string][]
@@ -197,6 +217,7 @@ export default function App() {
         <button className={`demo-btn ${demo != null ? 'on' : ''}`} onClick={() => (demo == null ? goDemo(0) : exitDemo())}>
           {demo == null ? '▶ Demo' : '■ Exit demo'}
         </button>
+        <button className="help-btn" onClick={() => setWelcome(true)} title="What is this? How to read the map" aria-label="About Isthmus">?</button>
         <div className="status">
           {tab === 'live' && srcLabel && <span className={`badge ${srcTone}`}>{srcLabel}</span>}
           {tab === 'live' && loading && <span className="badge"><span className="spinner sm" /> Simulating</span>}
@@ -305,9 +326,29 @@ export default function App() {
             </ErrorBoundary>
           </div>
         )}
+        {tab === 'how' && (
+          <div className="view">
+            <ErrorBoundary label="how-it-works view">
+              <HowItWorksTab onGo={setTab} onDemo={() => goDemo(0)} />
+            </ErrorBoundary>
+          </div>
+        )}
         {tab === 'assumptions' && <div className="view"><ErrorBoundary label="assumptions view"><AssumptionsTab /></ErrorBoundary></div>}
       </main>
       <Toasts toasts={toasts} dismiss={dismiss} />
+      {welcome && (
+        <Welcome
+          onClose={closeWelcome}
+          onDemo={() => {
+            closeWelcome()
+            goDemo(0)
+          }}
+          onHowItWorks={() => {
+            closeWelcome()
+            setTab('how')
+          }}
+        />
+      )}
     </div>
   )
 }
