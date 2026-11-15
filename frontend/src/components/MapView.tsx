@@ -17,7 +17,8 @@ import { floodStepAt, isFloodResult } from '../lib/hazard'
 import { Tooltip, type HoverInfo } from './Tooltip'
 import type { Selection } from './InfoCard'
 
-const INITIAL_VIEW = { longitude: -89.374, latitude: 43.075, zoom: 13.5, pitch: 0, bearing: 0 }
+// Default overview: the isthmus with Lake Mendota to the north and Lake Monona to the south.
+const INITIAL_VIEW = { longitude: -89.392, latitude: 43.084, zoom: 12.4, pitch: 0, bearing: 0 }
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 const MAX_PARTICLES = 4000
 const WATER = '#0e1a2b'
@@ -83,6 +84,8 @@ interface Props {
   fitTo: ScenarioResponse['zones'] | null
   /** Only a click on the rail line itself moves the derailment (used in the demo, so stray clicks don't). */
   railOnly: boolean
+  /** Bumped by the logo: fly back to the default downtown overview. */
+  home: number
 }
 
 type Zones = ScenarioResponse['zones']
@@ -160,8 +163,17 @@ interface Particle {
   edge: EdgeFeature
 }
 
-export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo, railOnly }: Props) {
-  const initialViewState = useMemo(() => fitView(fitTo), [fitTo])
+export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo, railOnly, home }: Props) {
+  // Camera target: a new result's zone (fitTo) or, when the logo is clicked, the default overview.
+  const [cam, setCam] = useState(() => ({ fitTo, home, view: fitView(fitTo) as ReturnType<typeof fitView> }))
+  if (fitTo !== cam.fitTo || home !== cam.home) {
+    setCam({
+      fitTo,
+      home,
+      view: home !== cam.home ? { ...INITIAL_VIEW, transitionDuration: 1200, transitionInterpolator: new FlyToInterpolator() } : fitView(fitTo),
+    })
+  }
+  const initialViewState = cam.view
   // Track the camera so road labels can be HTML (crisp glass pills) that follow the map.
   const [view, setView] = useState<{ longitude: number; latitude: number; zoom: number }>(INITIAL_VIEW)
   const [size, setSize] = useState<{ width: number; height: number }>({ width: window.innerWidth, height: window.innerHeight })

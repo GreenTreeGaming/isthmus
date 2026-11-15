@@ -161,6 +161,17 @@ export default function App() {
     setPinned(null)
   }, [])
 
+  // Logo: back to the main view (live tab, no demo, no open card, camera on the downtown overview).
+  const [home, setHome] = useState(0)
+  const goHome = () => {
+    setTab('live')
+    if (demo != null) exitDemo()
+    setSelection(null)
+    setPlaying(false)
+    setTime(null)
+    setHome((h) => h + 1)
+  }
+
   // Fit the camera to the zone on the first result, and to each demo step's zone once it lands.
   const [fitFor, setFitFor] = useState<typeof result>(null)
   if (result && !loading && result !== fitFor && (demo != null || fitFor == null)) setFitFor(result)
@@ -205,17 +216,19 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden>
-            <rect width="32" height="32" rx="8" fill="#141516" stroke="#23252a" />
-            <path d="M5 22c6-1 9-5 11-9s6-6 11-7" stroke="#d0d6e0" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-            <circle cx="16" cy="13" r="3" fill="#f7f8f8" />
+        <button className="brand" onClick={goHome} title="Back to the live map overview" aria-label="Isthmus: back to the live map overview">
+          {/* The isthmus: a narrow strip of land pinched between two lake shorelines, the Capitol at its waist. */}
+          <svg className="brand-mark" viewBox="0 0 24 24" width="24" height="24" aria-hidden>
+            <rect x="0.5" y="0.5" width="23" height="23" rx="6" fill="#18191b" stroke="rgba(255,255,255,0.12)" />
+            <path d="M4 15.5C7.5 15 9.5 12.8 10.6 10.6C11.7 8.4 13 5.5 15.5 4" stroke="#f7f8f8" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <path d="M8.5 20C11 18.5 12.3 15.6 13.4 13.4C14.5 11.2 16.5 9 20 8.5" stroke="#f7f8f8" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <circle cx="12" cy="12" r="1.25" fill="#f7f8f8" />
           </svg>
-          <div>
-            <div className="brand-name">Isthmus</div>
-            <div className="brand-sub">Emergency evacuation planner · Downtown Madison</div>
-          </div>
-        </div>
+          <span className="brand-text">
+            <span className="brand-name">Isthmus</span>
+            <span className="brand-sub">Emergency evacuation planner · Downtown Madison</span>
+          </span>
+        </button>
         <nav className="tabs" role="tablist" aria-label="Views" style={{ '--i': TABS.findIndex(([k]) => k === tab) } as React.CSSProperties}>
           <span className="tab-ink" aria-hidden />
           {TABS.map(([k, label]) => (
@@ -259,6 +272,7 @@ export default function App() {
             onSelect={setSelection}
             fitTo={fitFor?.zones ?? null}
             railOnly={demo != null}
+            home={home}
           />
           </ErrorBoundary>
           {loading && (
