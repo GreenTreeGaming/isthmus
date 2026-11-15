@@ -83,6 +83,10 @@ def test_gold_files_served(client, tmp_path, monkeypatch):
     assert client.get("/insights").json()["n_failed"] == 2
     r = client.get("/block-frequency")
     assert r.headers["x-isthmus-source"] == "gold" and r.json()[0]["share_shelter"] == 0.4
+    assert client.get("/robustness").json() == {}          # not written yet
+    (tmp_path / "robustness.json").write_text(json.dumps({"grid": {"n_scenarios": 288}, "variants": {"baseline": {"n": 288}}}))
+    r = client.get("/robustness")
+    assert r.headers["x-isthmus-source"] == "gold" and r.json()["variants"]["baseline"]["n"] == 288
 
 
 def test_cors(client):

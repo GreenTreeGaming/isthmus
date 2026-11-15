@@ -123,6 +123,17 @@ def insights(response: Response) -> dict[str, Any]:
     return _load_json(path)
 
 
+@app.get("/robustness")
+def robustness(response: Response) -> dict[str, Any]:
+    """data/gold/robustness.json (engine/robustness.py): the batch re-run under assumption variants; {} until it exists."""
+    path = config.GOLD_DIR / "robustness.json"
+    if not path.exists():
+        response.headers["X-Isthmus-Source"] = "placeholder"
+        return {}
+    response.headers["X-Isthmus-Source"] = "gold"
+    return _load_json(path)
+
+
 @app.get("/block-frequency")
 def block_frequency(response: Response) -> list[dict[str, Any]]:
     """data/gold/block_frequency.json: [{block_id, share_shelter, share_evacuate}]; empty until batch runs."""

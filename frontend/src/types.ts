@@ -104,6 +104,25 @@ export interface Insights {
   }[]
   n_failed?: number
   median_runtime_ms?: number | null
+  by_wind_speed?: { wind_speed_mps: number; mean_clearance_s: number; mean_evacuating: number; mean_sheltering: number }[]
+  garage_in_zone_share?: number
+  bottleneck_method?: string
+}
+
+export interface RobustnessVariant {
+  n: number
+  failed: number
+  clearance_min_by_wind_speed: Record<string, number>
+  mean_clearance_min: number
+  mean_evacuating: number
+  mean_unserved: number
+  capitol_lakes_in_zone: number
+  garage_in_zone: number
+  top_choke_points: string[]
+}
+export interface Robustness {
+  grid: { n_scenarios: number; n_points: number; times: string[]; wind_speeds: number[] }
+  variants: Record<string, RobustnessVariant>
 }
 
 export interface AssumptionItem {
