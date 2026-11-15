@@ -39,12 +39,11 @@ const minsDiff = (s: number) => `${Math.round(s / 60)}`
 
 function Skeleton() {
   return (
-    <div className="cards skeleton" aria-busy="true" aria-label="Running the first scenario">
-      {['hero-card', '', '', 'wide'].map((c, i) => (
-        <div key={i} className={`card ${c}`}>
+    <div className="hud-metrics skeleton" aria-busy="true" aria-label="Running the first scenario">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="metric">
           <div className="sk sk-label" />
           <div className="sk sk-value" />
-          <div className="sk sk-sub" />
         </div>
       ))}
     </div>
@@ -58,38 +57,37 @@ export function SummaryCards({ summary: s, loading, pinned }: Props) {
   const servedPct = s.need_bus_total > 0 ? served / s.need_bus_total : 1
   const unserved = s.need_bus_unserved > 0
   return (
-    <div className={`cards ${loading ? 'stale' : ''}`}>
-      <div className="card hero-card">
-        <div className="card-label">Everyone out in <Tip text="From the traffic simulation: 5 min of warning, departures in waves 10 min apart, and cars queue wherever a road is full. Ends when the last evacuating car reaches safety." /></div>
-        <div className="card-value">{s.people_evacuating > 0 ? <Num value={s.sim_clearance_s} fmt={fmtDuration} /> : 'No one leaves'}</div>
+    <div className={`hud-metrics ${loading ? 'stale' : ''}`}>
+      <div className="metric lead">
+        <div className="metric-label">Everyone out in <Tip text="From the traffic simulation: 5 min of warning, departures in waves 10 min apart, and cars queue wherever a road is full. Ends when the last evacuating car reaches safety." /></div>
+        <div className="metric-value">{s.people_evacuating > 0 ? <Num value={s.sim_clearance_s} fmt={fmtDuration} /> : 'No one leaves'}</div>
         {b && <Delta from={b.sim_clearance_s} to={s.sim_clearance_s} fmt={mins} unitDiff={minsDiff} better="lower" />}
       </div>
-      <div className="card">
-        <div className="card-label">
+      <div className="metric">
+        <div className="metric-label">
           <i className="dot evac" /> Evacuating <Tip text="People in blocks that can get out before the gas arrives (5 min warning + drive time, with a 1.5x congestion margin). They leave in waves, earliest gas first." />
         </div>
-        <div className="card-value"><Num value={s.people_evacuating} fmt={fmtCompact} /></div>
+        <div className="metric-value"><Num value={s.people_evacuating} fmt={fmtCompact} /></div>
         {b && <Delta from={b.people_evacuating} to={s.people_evacuating} fmt={fmtCompact} unitDiff={fmtCompact} better="neutral" />}
       </div>
-      <div className="card">
-        <div className="card-label">
+      <div className="metric">
+        <div className="metric-label">
           <i className="dot shelter" /> Sheltering <Tip text="People in blocks the gas would reach before they could drive clear. Staying indoors with windows and vents shut is safer than being on the road." />
         </div>
-        <div className="card-value"><Num value={s.people_sheltering} fmt={fmtCompact} /></div>
+        <div className="metric-value"><Num value={s.people_sheltering} fmt={fmtCompact} /></div>
         {b && <Delta from={b.people_sheltering} to={s.people_sheltering} fmt={fmtCompact} unitDiff={fmtCompact} better="neutral" />}
       </div>
-      <div className={`card wide ${unserved ? 'danger' : ''}`}>
-        <div className="card-label">
+      <div className={`metric ${unserved ? 'danger' : ''}`}>
+        <div className="metric-label">
           <i className="dot bus" /> Need a bus <Tip text="Estimated from Census tables: car-free households with seniors or people with disabilities, plus nursing-home residents. An area-level estimate, never individuals. Anyone no bus can reach before the gas is counted as left behind." />
         </div>
-        <div className="card-value">
+        <div className="metric-value">
           <Num value={s.need_bus_total} fmt={fmtInt} />
-          {unserved && <span className="bad small"> · <Num value={s.need_bus_unserved} fmt={fmtInt} /> left behind</span>}
+          {unserved && <span className="metric-flag"><Num value={s.need_bus_unserved} fmt={fmtInt} /> left</span>}
         </div>
-        <div className="meter" aria-label={`${Math.round(servedPct * 100)}% picked up before the gas arrives`}>
+        <div className="meter" role="img" aria-label={`${Math.round(servedPct * 100)}% picked up before the gas arrives`}>
           <span style={{ width: `${servedPct * 100}%` }} />
         </div>
-        <div className="card-sub">{unserved ? 'not reached before the gas' : s.need_bus_total > 0 ? 'all picked up in time' : 'none in the zone'}</div>
         {b && <Delta from={b.need_bus_unserved} to={s.need_bus_unserved} fmt={(n) => `${fmtInt(n)} left`} unitDiff={fmtInt} better="lower" />}
       </div>
     </div>

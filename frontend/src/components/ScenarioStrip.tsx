@@ -4,14 +4,14 @@ import { compass } from '../lib/format'
 interface Props {
   params: ScenarioParams
   railName: string | null
-  place: string
+  place?: string
   children?: React.ReactNode
 }
 
 const CHEM: Record<string, string> = { chlorine: 'Chlorine', ammonia: 'Ammonia' }
 const TOD: Record<string, string> = { night: 'Night', day: 'Day', gameday: 'Game day' }
 
-export function ScenarioStrip({ params: p, railName, place, children }: Props) {
+export function ScenarioStrip({ params: p, railName, children }: Props) {
   const parts = [
     CHEM[p.chemical] ?? p.chemical,
     `${p.spill_size === 'large' ? 'Large' : 'Small'} spill`,
@@ -22,18 +22,13 @@ export function ScenarioStrip({ params: p, railName, place, children }: Props) {
     Math.abs(p.compliance - 0.85) > 0.005 ? `${Math.round(p.compliance * 100)}% comply` : null,
   ].filter(Boolean)
   return (
-    <div className="scenario-strip">
+    <div className="hud-scenario">
       <span className="strip-pin" aria-hidden />
-      <div className="strip-where">
-        <b>{railName ?? 'Rail line'}</b>
-        <span>{place}</span>
+      <div className="hud-where">
+        <b title={railName ?? undefined}>{railName ?? 'Rail line'}</b>
+        <span className="hud-params" title={parts.join(' · ')}>{parts.join(' · ')}</span>
       </div>
-      <div className="strip-params">
-        {parts.map((t, i) => (
-          <span key={i}>{t}</span>
-        ))}
-      </div>
-      {children && <div className="strip-actions">{children}</div>}
+      {children}
     </div>
   )
 }

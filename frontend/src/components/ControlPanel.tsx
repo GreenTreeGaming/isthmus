@@ -13,6 +13,8 @@ interface Props {
   pickHint: string | null
   railName: string | null
   place: string
+  /** Plain-language summary of the current plan, shown above Run. */
+  plan?: React.ReactNode
 }
 
 function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: [T, string][]; onChange: (v: T) => void; label: string }) {
@@ -40,14 +42,14 @@ function Slider({ label, value, display, min, max, step, onChange }: { label: st
   )
 }
 
-export function ControlPanel({ params, update, onRun, onReset, loading, autoRun, setAutoRun, pickHint, railName, place }: Props) {
+export function ControlPanel({ params, update, onRun, onReset, loading, autoRun, setAutoRun, pickHint, railName, place, plan }: Props) {
   return (
     <aside className="panel controls">
       <section>
         <h3>Release point <Tip text="Derailments only happen on track, so the pin always snaps to the nearest rail line. The demo uses the line nearest the Capitol." /></h3>
         <div className={`pick-hint ${pickHint ? 'warn' : ''}`}>
           <span className="pin-dot" />
-          {pickHint ?? 'Click a rail line to place the derailment. Click a colored area or bus route to see why.'}
+          {pickHint ?? 'Click a rail line to move the derailment.'}
         </div>
         <div className="release-where">
           <b>{railName ?? 'Rail line'}</b>
@@ -88,6 +90,7 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
       </section>
 
       <div className="run-footer">
+      {plan}
       <div className="run-row">
         <button className="run" onClick={onRun} disabled={loading}>
           {loading ? <span className="spinner" /> : '▶'} {loading ? 'Running…' : 'Run scenario'}

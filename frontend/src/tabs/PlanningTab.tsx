@@ -1,20 +1,40 @@
 import { useEffect, useState } from 'react'
 import {
-  Bar, BarChart, CartesianGrid, LabelList, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
+  Bar, BarChart, Cell, LabelList, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { getInsights, getRobustness } from '../api'
 import type { Insights, Robustness } from '../types'
 import { compass, fmtCompact, fmtDuration, fmtInt, fmtPct } from '../lib/format'
 
-const SERIES = '#3987e5'
-const GRID = 'rgba(148,163,184,0.14)'
-const AXIS = { fill: '#a9b6c6', fontSize: 13.5 }
+// Monochrome charts: neutral bars, and colour only on the worst case (amber = slowest / most frequent, red = most exposed).
+const SERIES = '#8a8f98'
+const STRONG = '#f7f8f8'
+const AMBER = '#e0a43a'
+const RED = '#ef4444'
+const GRID = 'rgba(255,255,255,0.06)'
+const AXIS = { fill: '#8a8f98', fontSize: 13 }
+const LABEL = '#d0d6e0'
 const TT = {
-  contentStyle: { background: '#111821', border: '1px solid #263241', borderRadius: 8, fontSize: 12.5 },
-  labelStyle: { color: '#e6edf5', fontWeight: 600 },
-  itemStyle: { color: '#c3cfdc' },
-  cursor: { fill: 'rgba(148,163,184,0.08)' },
+  contentStyle: {
+    background: 'rgba(15,16,17,0.92)',
+    backdropFilter: 'blur(16px) saturate(180%)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 8,
+    fontSize: 13,
+    fontVariantNumeric: 'tabular-nums',
+    boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+    padding: '8px 12px',
+  },
+  labelStyle: { color: '#f7f8f8', fontWeight: 600, marginBottom: 2 },
+  itemStyle: { color: '#d0d6e0', padding: 0 },
+  cursor: { fill: 'rgba(255,255,255,0.04)' },
+}
+
+/** One Cell per bar: the largest value gets the highlight colour, the rest stay neutral. */
+function highlightMax<T>(data: T[], key: (d: T) => number, color: string) {
+  const max = Math.max(...data.map(key))
+  return data.map((d, i) => <Cell key={i} fill={key(d) === max && max > 0 ? color : SERIES} />)
 }
 const FACILITY_LABEL: Record<string, string> = { nursing_home: 'Nursing home', hospital: 'Hospital', dorm: 'Residence hall', stadium: 'Stadium' }
 
@@ -186,12 +206,12 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
         >
           <ResponsiveContainer width="100%" height={barH(bottlenecks.length)}>
             <BarChart data={bottlenecks} layout="vertical" margin={{ left: 8, right: 48, top: 4, bottom: 4 }} barCategoryGap={8}>
-              <CartesianGrid horizontal={false} stroke={GRID} />
               <XAxis type="number" domain={[0, 1]} tickFormatter={fmtPct} tick={AXIS} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={170} tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" width={170} tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
               <Tooltip {...TT} formatter={(v: number, _n, p) => [`${fmtPct(v)} (${fmtInt(p.payload.times_bottleneck)} runs)`, 'Bottleneck in']} />
-              <Bar dataKey="share" fill={SERIES} radius={[0, 4, 4, 0]} maxBarSize={22}>
-                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill="#c3cfdc" fontSize={12} />
+              <Bar dataKey="share" radius={[0, 3, 3, 0]} maxBarSize={18}>
+                {highlightMax(bottlenecks, (d) => d.share, AMBER)}
+                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill={LABEL} fontSize={12} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -200,12 +220,12 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
         <ChartCard title="Facilities most often inside the zone" sub="Share of scenarios where the facility falls in the isolation or protective zone">
           <ResponsiveContainer width="100%" height={barH(facilities.length)}>
             <BarChart data={facilities} layout="vertical" margin={{ left: 8, right: 48, top: 4, bottom: 4 }} barCategoryGap={8}>
-              <CartesianGrid horizontal={false} stroke={GRID} />
               <XAxis type="number" domain={[0, 1]} tickFormatter={fmtPct} tick={AXIS} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="label" width={190} tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={190} tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
               <Tooltip {...TT} formatter={(v: number, _n, p) => [fmtPct(v), FACILITY_LABEL[p.payload.type] ?? p.payload.type]} />
-              <Bar dataKey="share" fill={SERIES} radius={[0, 4, 4, 0]} maxBarSize={22}>
-                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill="#c3cfdc" fontSize={12} />
+              <Bar dataKey="share" radius={[0, 3, 3, 0]} maxBarSize={18}>
+                {highlightMax(facilities, (d) => d.share, RED)}
+                <LabelList dataKey="share" position="right" formatter={(v: number) => fmtPct(v)} fill={LABEL} fontSize={12} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -214,11 +234,11 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
         <ChartCard title="Time to get everyone out, by wind direction" sub="Average minutes from alert until the last evacuating vehicle is out, by where the wind comes from">
           <ResponsiveContainer width="100%" height={320}>
             <RadarChart data={wind} outerRadius="72%">
-              <PolarGrid stroke={GRID} />
-              <PolarAngleAxis dataKey="dir" tick={{ ...AXIS, fill: '#d6dee8', fontSize: 13 }} />
+              <PolarGrid stroke={GRID} gridType="circle" />
+              <PolarAngleAxis dataKey="dir" tick={{ ...AXIS, fill: LABEL, fontSize: 13 }} />
               <PolarRadiusAxis angle={90} tick={{ ...AXIS, fontSize: 10 }} axisLine={false} tickFormatter={(v: number) => `${v}m`} />
               <Tooltip {...TT} formatter={(v: number) => [`${v} min`, 'Avg. clearance']} labelFormatter={(l) => `Wind from ${l}`} />
-              <Radar dataKey="clearance_min" stroke={SERIES} strokeWidth={2} fill={SERIES} fillOpacity={0.28} dot={{ r: 3, fill: SERIES }} />
+              <Radar dataKey="clearance_min" stroke={STRONG} strokeWidth={1.5} fill={SERIES} fillOpacity={0.16} dot={{ r: 3, fill: STRONG }} />
             </RadarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -226,11 +246,12 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
         <ChartCard title="Residents left behind, by wind direction" sub="Average residents who need a ride that no bus can reach before the gas (with 20 buses this stays near zero)">
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={wind} margin={{ left: 0, right: 12, top: 20, bottom: 4 }} barCategoryGap="22%">
-              <CartesianGrid vertical={false} stroke={GRID} />
-              <XAxis dataKey="dir" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="dir" tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
               <YAxis tick={AXIS} axisLine={false} tickLine={false} width={40} />
               <Tooltip {...TT} formatter={(v: number) => [fmtInt(v), 'Avg. unserved']} labelFormatter={(l) => `Wind from ${l}`} />
-              <Bar dataKey="mean_unserved" fill={SERIES} radius={[4, 4, 0, 0]} maxBarSize={36} />
+              <Bar dataKey="mean_unserved" radius={[3, 3, 0, 0]} maxBarSize={32}>
+                {highlightMax(wind, (d) => d.mean_unserved, RED)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -241,12 +262,12 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
           <ChartCard title="Time to get everyone out, by time of day" sub="Average minutes from alert until the last evacuating vehicle is out">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={byTime} margin={{ left: 0, right: 12, top: 22, bottom: 4 }} barCategoryGap="30%">
-                <CartesianGrid vertical={false} stroke={GRID} />
-                <XAxis dataKey="label" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS} axisLine={false} tickLine={false} width={40} tickFormatter={(v: number) => `${v}m`} />
                 <Tooltip {...TT} formatter={(v: number) => [`${v} min`, 'Avg. time to get everyone out']} />
-                <Bar dataKey="clearance_min" fill={SERIES} radius={[4, 4, 0, 0]} maxBarSize={56}>
-                  <LabelList dataKey="clearance_min" position="top" formatter={(v: number) => `${v} min`} fill="#c3cfdc" fontSize={12} />
+                <Bar dataKey="clearance_min" radius={[3, 3, 0, 0]} maxBarSize={48}>
+                  {highlightMax(byTime, (d) => d.clearance_min, AMBER)}
+                  <LabelList dataKey="clearance_min" position="top" formatter={(v: number) => `${v} min`} fill={LABEL} fontSize={12} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -282,25 +303,24 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
           <ChartCard title="Who can leave, by wind speed" sub="Average people per scenario. Stronger wind shrinks the zone, but the gas arrives too fast to drive out.">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={bySpeed} margin={{ left: 0, right: 12, top: 22, bottom: 4 }} barCategoryGap="24%">
-                <CartesianGrid vertical={false} stroke={GRID} />
-                <XAxis dataKey="label" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => fmtCompact(v)} />
                 <Tooltip {...TT} formatter={(v: number, n: string) => [fmtInt(v), n === 'mean_evacuating' ? 'Evacuating' : 'Sheltering']} />
-                <Bar dataKey="mean_evacuating" fill="#ff8a1f" radius={[4, 4, 0, 0]} maxBarSize={44} />
+                <Bar dataKey="mean_evacuating" fill="#ff6b1a" radius={[4, 4, 0, 0]} maxBarSize={44} />
                 <Bar dataKey="mean_sheltering" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={44} />
               </BarChart>
             </ResponsiveContainer>
-            <div className="mini-legend"><span><i style={{ background: '#ff8a1f' }} />Evacuating</span><span><i style={{ background: '#8b5cf6' }} />Sheltering in place</span></div>
+            <div className="mini-legend"><span><i style={{ background: '#ff6b1a' }} />Evacuating</span><span><i style={{ background: '#8b5cf6' }} />Sheltering in place</span></div>
           </ChartCard>
           <ChartCard title="Time to get everyone out, by wind speed" sub="Average minutes from the alert until the last evacuating car is out">
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={bySpeed} margin={{ left: 0, right: 12, top: 22, bottom: 4 }} barCategoryGap="30%">
-                <CartesianGrid vertical={false} stroke={GRID} />
-                <XAxis dataKey="label" tick={{ ...AXIS, fill: '#d6dee8' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
                 <YAxis tick={AXIS} axisLine={false} tickLine={false} width={52} tickFormatter={(v: number) => `${v}m`} />
                 <Tooltip {...TT} formatter={(v: number) => [`${v} min`, 'Avg. time to get everyone out']} />
-                <Bar dataKey="clearance_min" fill={SERIES} radius={[4, 4, 0, 0]} maxBarSize={56}>
-                  <LabelList dataKey="clearance_min" position="top" formatter={(v: number) => `${v} min`} fill="#c3cfdc" fontSize={13} />
+                <Bar dataKey="clearance_min" radius={[3, 3, 0, 0]} maxBarSize={48}>
+                  {highlightMax(bySpeed, (d) => d.clearance_min, AMBER)}
+                  <LabelList dataKey="clearance_min" position="top" formatter={(v: number) => `${v} min`} fill={LABEL} fontSize={13} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

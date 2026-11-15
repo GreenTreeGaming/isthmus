@@ -73,7 +73,7 @@ function fitView(z: Zones | null) {
   const panel = width > 1700 ? 330 : width > 1280 ? 300 : 272
   try {
     const v = new WebMercatorViewport({ width, height }).fitBounds(bb, {
-      padding: { left: panel + 40, right: Math.min(280, width * 0.2), top: Math.min(280, height * 0.38), bottom: Math.min(200, height * 0.28) },
+      padding: { left: panel + 40, right: Math.min(280, width * 0.2), top: Math.min(170, height * 0.26), bottom: Math.min(190, height * 0.27) },
       maxZoom: 15,
     })
     return { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom, pitch: 0, bearing: 0, transitionDuration: 1400, transitionInterpolator: new FlyToInterpolator() }

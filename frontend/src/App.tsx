@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getAssumptions, getBlockFrequency, getBlocks, getRail, simulate } from './api'
 import { ControlPanel } from './components/ControlPanel'
 import { DemoBar } from './components/DemoBar'
@@ -16,9 +16,10 @@ import { derive } from './lib/derive'
 import { planStory } from './lib/story'
 import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
 import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
-import { AssumptionsTab } from './tabs/AssumptionsTab'
-import { HowItWorksTab } from './tabs/HowItWorksTab'
-import { PlanningTab } from './tabs/PlanningTab'
+// Secondary tabs load on first visit, keeping charts out of the map's start-up bundle.
+const AssumptionsTab = lazy(() => import('./tabs/AssumptionsTab').then((m) => ({ default: m.AssumptionsTab })))
+const HowItWorksTab = lazy(() => import('./tabs/HowItWorksTab').then((m) => ({ default: m.HowItWorksTab })))
+const PlanningTab = lazy(() => import('./tabs/PlanningTab').then((m) => ({ default: m.PlanningTab })))
 import type { BlockFrequency, BlockGeoCollection, RailCollection, ScenarioParams } from './types'
 import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
@@ -74,6 +75,7 @@ export default function App() {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const dismiss = useCallback((id: string) => setDismissed((d) => new Set(d).add(id)), [])
   const [storyOpen, setStoryOpen] = useState(false)
+  const [sideOpen, setSideOpen] = useState(true)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [timing, setTiming] = useState<WaveTiming>(DEFAULT_TIMING)
   const [blockGeo, setBlockGeo] = useState<BlockGeoCollection | null>(null)
@@ -201,7 +203,7 @@ export default function App() {
         <div className="brand">
           <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden>
             <rect width="32" height="32" rx="8" fill="#141516" stroke="#23252a" />
-            <path d="M5 22c6-1 9-5 11-9s6-6 11-7" stroke="#5e6ad2" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+            <path d="M5 22c6-1 9-5 11-9s6-6 11-7" stroke="#d0d6e0" strokeWidth="2.6" fill="none" strokeLinecap="round" />
             <circle cx="16" cy="13" r="3" fill="#f7f8f8" />
           </svg>
           <div>
@@ -233,7 +235,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''} ${demo != null ? 'demo-mode' : ''}`}>
+        <div className={`view live ${tab === 'live' ? '' : 'hidden'} ${loading ? 'is-loading' : ''} ${demo != null ? 'demo-mode' : ''} ${sideOpen || demo != null ? '' : 'side-closed'}`}>
           <ErrorBoundary label="map">
           <MapView
             result={result}
@@ -270,12 +272,38 @@ export default function App() {
             pickHint={pickHint}
             railName={railName}
             place={place}
+            plan={
+              result && (
+                <button
+                  className={`plan-mini ${loading ? 'stale' : ''} ${storyOpen ? 'open' : ''}`}
+                  onClick={() => setStoryOpen((o) => !o)}
+                  aria-expanded={storyOpen}
+                  title={storyOpen ? 'Show less' : 'Show the full summary'}
+                >
+                  <span className="plan-head">
+                    <i className={`status-dot ${result.summary.need_bus_unserved > 0 ? 'bad' : 'ok'}`} aria-hidden />
+                    {result.summary.need_bus_unserved > 0 ? 'Plan · some residents left behind' : 'Plan · everyone reached in time'}
+                  </span>
+                  <span className="story-text">{planStory(result, railName)}</span>
+                </button>
+              )
+            }
           />
+          <button
+            className="side-toggle"
+            onClick={() => setSideOpen((o) => !o)}
+            aria-label={sideOpen ? 'Hide controls' : 'Show controls'}
+            aria-expanded={sideOpen}
+            title={sideOpen ? 'Hide controls' : 'Show controls'}
+          >
+            <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden><path d="M7.5 3 4.5 6l3 3" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
           <div className="overlay-top">
-            <ScenarioStrip params={params} railName={railName} place={place}>
+            <div className="hud">
+            <ScenarioStrip params={params} railName={railName}>
               {pinned ? (
-                <button className="btn-secondary sm pinned" onClick={() => setPinned(null)} title="Stop comparing">
-                  Comparing with {pinned.label} <span aria-hidden>✕</span>
+                <button className="btn-secondary sm pinned" onClick={() => setPinned(null)} title={`Comparing with ${pinned.label}. Click to stop.`}>
+                  vs. {pinned.label} <span aria-hidden>✕</span>
                 </button>
               ) : (
                 <button
@@ -289,17 +317,7 @@ export default function App() {
               )}
             </ScenarioStrip>
             <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} />
-            {result && demo == null && (
-              <button
-                className={`plan-story ${loading ? 'stale' : ''} ${storyOpen ? 'open' : ''}`}
-                onClick={() => setStoryOpen((o) => !o)}
-                title={storyOpen ? 'Collapse' : 'Show the full summary'}
-              >
-                <i className={`status-dot ${result.summary.need_bus_unserved > 0 ? 'bad' : 'ok'}`} aria-hidden />
-                <span className="eyebrow">Plan</span>
-                <span className="story-text">{planStory(result, railName)}</span>
-              </button>
-            )}
+            </div>
           </div>
           {selection && result && (
             <InfoCard
@@ -333,6 +351,7 @@ export default function App() {
         {tab === 'planning' && (
           <div className="view">
             <ErrorBoundary label="planning view">
+            <Suspense fallback={<div className="page"><div className="loading-box"><span className="spinner" /> Loading…</div></div>}>
             <PlanningTab
               frequencyReady={frequency != null}
               onShowFrequency={() => {
@@ -341,17 +360,20 @@ export default function App() {
                 setTab('live')
               }}
             />
+            </Suspense>
             </ErrorBoundary>
           </div>
         )}
         {tab === 'how' && (
           <div className="view">
             <ErrorBoundary label="how-it-works view">
-              <HowItWorksTab onGo={setTab} onDemo={() => goDemo(0)} />
+              <Suspense fallback={<div className="page"><div className="loading-box"><span className="spinner" /> Loading…</div></div>}>
+                <HowItWorksTab onGo={setTab} onDemo={() => goDemo(0)} />
+              </Suspense>
             </ErrorBoundary>
           </div>
         )}
-        {tab === 'assumptions' && <div className="view"><ErrorBoundary label="assumptions view"><AssumptionsTab /></ErrorBoundary></div>}
+        {tab === 'assumptions' && <div className="view"><ErrorBoundary label="assumptions view"><Suspense fallback={<div className="page"><div className="loading-box"><span className="spinner" /> Loading…</div></div>}><AssumptionsTab /></Suspense></ErrorBoundary></div>}
       </main>
       <Toasts toasts={toasts} dismiss={dismiss} />
       {welcome && (

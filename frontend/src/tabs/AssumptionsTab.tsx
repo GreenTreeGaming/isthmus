@@ -20,33 +20,58 @@ export function AssumptionsTab() {
       <header className="page-head">
         <div>
           <h2>Assumptions &amp; limitations</h2>
-          <p className="muted">Every number the model depends on, in one place. Change them in <code>engine/assumptions.py</code>.</p>
+          <p className="muted">Every number the model depends on, in one place. Each one is tunable in <code>engine/assumptions.py</code>.</p>
         </div>
         {data.source === 'placeholder' && <span className="badge warn">Draft values — engine not connected yet</span>}
       </header>
 
-      <div className="assume-grid">
+      <nav className="spec-toc" aria-label="Sections">
         {data.groups.map((g) => (
-          <section key={g.title} className="assume-card">
-            <h3>{g.title}</h3>
-            <dl>
-              {g.items.map((it) => (
-                <div key={it.name} className="assume-row">
-                  <dt>
-                    {it.name}
-                    {it.note && <small>{it.note}</small>}
-                    {it.key && <code className="const-key">{it.key}</code>}
-                  </dt>
-                  <dd className={typeof it.value === 'string' && it.value.length > 14 ? 'long' : 'mono'}>
-                    {String(it.value)}
-                    {it.unit && <span className="unit"> {it.unit}</span>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+          <a key={g.title} href={`#spec-${g.title}`}>{g.title}</a>
         ))}
-      </div>
+      </nav>
+
+      {data.groups.map((g) => (
+        <section key={g.title} id={`spec-${g.title}`} className="spec">
+          <h3>{g.title}</h3>
+          <table className="spec-table">
+            <thead>
+              <tr>
+                <th scope="col">Parameter</th>
+                <th scope="col">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.items.map((it) => {
+                const text = String(it.value)
+                const long = text.length > 18
+                return (
+                  <tr key={it.name}>
+                    <th scope="row">
+                      <span className="spec-name">{it.name}</span>
+                      {it.note && <span className="spec-note">{it.note}</span>}
+                      {it.key && <code className="const-key">{it.key}</code>}
+                    </th>
+                    <td className={long ? 'spec-long' : ''}>
+                      {long && text.includes(' · ') ? (
+                        <span className="val-list">
+                          {text.split(' · ').map((part) => {
+                            const [k, v] = part.split(': ')
+                            return v == null ? <code key={part} className="val">{part}</code> : (
+                              <span key={part} className="val-pair"><span>{k}</span><code className="val">{v}</code></span>
+                            )
+                          })}
+                        </span>
+                      ) : long ? <span className="spec-text">{text}</span> : <code className="val">{text}</code>}
+                      {it.unit && <span className="unit"> {it.unit}</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </section>
+      ))}
 
       <div className="assume-grid two">
         <section className="assume-card">
