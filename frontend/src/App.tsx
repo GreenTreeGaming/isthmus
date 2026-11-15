@@ -13,6 +13,7 @@ import { SummaryCards, type Pinned } from './components/SummaryCards'
 import { Timeline } from './components/Timeline'
 import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
+import { planStory } from './lib/story'
 import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
 import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
 import { AssumptionsTab } from './tabs/AssumptionsTab'
@@ -65,6 +66,7 @@ export default function App() {
   const [staticError, setStaticError] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const dismiss = useCallback((id: string) => setDismissed((d) => new Set(d).add(id)), [])
+  const [storyOpen, setStoryOpen] = useState(false)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [timing, setTiming] = useState<WaveTiming>(DEFAULT_TIMING)
   const [blockGeo, setBlockGeo] = useState<BlockGeoCollection | null>(null)
@@ -282,6 +284,15 @@ export default function App() {
               )}
             </ScenarioStrip>
             <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} />
+            {result && demo == null && (
+              <button
+                className={`plan-story ${loading ? 'stale' : ''} ${storyOpen ? 'open' : ''}`}
+                onClick={() => setStoryOpen((o) => !o)}
+                title={storyOpen ? 'Collapse' : 'Show the full summary'}
+              >
+                <b>What this plan says:</b> {planStory(result, railName)}
+              </button>
+            )}
           </div>
           {selection && result && (
             <InfoCard

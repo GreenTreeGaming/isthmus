@@ -562,3 +562,26 @@ input[type='range']:focus-visible { outline: 2px solid var(--blue); outline-offs
 @media (max-width: 1100px) { .source-grid, .pipeline, .how-two { grid-template-columns: 1fr; } .stat-row { grid-template-columns: repeat(2, 1fr); } }
 .welcome-actions { position: sticky; bottom: -22px; margin: 20px -32px -22px; padding: 14px 32px 16px; background: linear-gradient(180deg, rgba(15, 20, 28, 0.85), var(--surface-solid) 35%); border-top: 1px solid var(--border); }
 .welcome-foot { margin-bottom: 4px; }
+
+/* ---------- Help tips + plan story ---------- */
+.tip-wrap { display: inline-flex; vertical-align: middle; text-transform: none; letter-spacing: 0; }
+.tip {
+  width: 17px; height: 17px; padding: 0; border-radius: 50%; border: 1px solid var(--border-strong); background: transparent;
+  color: var(--muted); font-size: 11.5px; font-weight: 800; font-style: italic; font-family: Georgia, serif; line-height: 1; display: inline-grid; place-items: center;
+}
+.tip:hover, .tip:focus-visible { color: var(--text); border-color: var(--text-2); outline: none; }
+.tip-bubble {
+  position: fixed; z-index: 90; width: 320px; padding: 10px 12px; border-radius: 10px; pointer-events: none;
+  background: rgba(12, 16, 23, 0.98); border: 1px solid var(--border-strong); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  font-size: 14px; font-weight: 400; line-height: 1.45; color: var(--text); text-transform: none; letter-spacing: 0; white-space: normal; animation: fade 0.12s ease;
+}
+.plan-story {
+  align-self: flex-start; max-width: 980px; padding: 8px 14px; border-radius: 10px; font-size: 15px; line-height: 1.45; color: var(--text);
+  background: rgba(10, 14, 20, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid var(--border); transition: opacity 0.25s;
+}
+.plan-story { text-align: left; cursor: pointer; font: inherit; font-size: 15px; }
+.plan-story b { color: var(--accent-2); }
+@media (max-height: 820px) {
+  .plan-story:not(.open) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+}
+.plan-story.stale { opacity: 0.6; }

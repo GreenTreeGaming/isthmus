@@ -1,4 +1,5 @@
 import type { ScenarioParams } from '../types'
+import { Tip } from './Tip'
 import { WindDial } from './WindDial'
 
 interface Props {
@@ -43,7 +44,7 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
   return (
     <aside className="panel controls">
       <section>
-        <h3>Release point</h3>
+        <h3>Release point <Tip text="Derailments only happen on track, so the pin always snaps to the nearest rail line. The demo uses the line nearest the Capitol." /></h3>
         <div className={`pick-hint ${pickHint ? 'warn' : ''}`}>
           <span className="pin-dot" />
           {pickHint ?? 'Click a rail line to place the derailment. Click a colored area or bus route to see why.'}
@@ -56,24 +57,24 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
       </section>
 
       <section>
-        <h3>Chemical &amp; spill</h3>
+        <h3>Chemical &amp; spill <Tip text="Danger-zone distances come from the 2024 Emergency Response Guidebook. A large spill is a whole rail tank car; for chlorine at night in light wind the zone reaches 7+ miles." /></h3>
         <Segmented label="Chemical" value={params.chemical} options={[['chlorine', 'Chlorine'], ['ammonia', 'Ammonia']]} onChange={(v) => update('chemical', v)} />
         <Segmented label="Spill size" value={params.spill_size} options={[['small', 'Small spill'], ['large', 'Large spill']]} onChange={(v) => update('spill_size', v)} />
       </section>
 
       <section>
-        <h3>Wind</h3>
+        <h3>Wind <Tip text="Direction decides where the gas goes. Speed cuts both ways: light wind makes a bigger zone but slow gas, so many can drive out; strong wind shrinks the zone but the gas arrives so fast that most people must shelter." /></h3>
         <WindDial fromDeg={params.wind_from_deg} onChange={(d) => update('wind_from_deg', d)} />
         <Slider label="Wind speed" value={params.wind_speed_mps} display={`${params.wind_speed_mps.toFixed(1)} m/s`} min={0.5} max={15} step={0.5} onChange={(v) => update('wind_speed_mps', v)} />
       </section>
 
       <section>
-        <h3>Time of day</h3>
+        <h3>Time of day <Tip text="Night: residents at home (2020 Census). Day: adds downtown workers (LEHD jobs data). Game day: adds about 75,000 people around Camp Randall." /></h3>
         <Segmented label="Time of day" value={params.time_of_day} options={[['night', 'Night'], ['day', 'Day'], ['gameday', 'Game day']]} onChange={(v) => update('time_of_day', v)} />
       </section>
 
       <section>
-        <h3>Response</h3>
+        <h3>Response <Tip text="Buses: Madison Metro's fleet, 60 seats each, leaving the garage 10 min after the alert. Compliance: share of people who follow the order. Contraflow: major roads run outbound only." /></h3>
         <Slider label="Buses available" value={params.bus_count} display={`${params.bus_count}`} min={0} max={80} step={1} onChange={(v) => update('bus_count', v)} />
         <Slider label="Compliance" value={params.compliance} display={`${Math.round(params.compliance * 100)}%`} min={0.6} max={1} step={0.01} onChange={(v) => update('compliance', v)} />
         <label className="toggle">
