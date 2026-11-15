@@ -12,7 +12,7 @@ import type { BlockFeature, BlockFrequency, BlockGeoCollection, Bus, EdgeFeature
 import { COLORS, blockColor, frequencyColor, loadColor } from '../lib/colors'
 import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
 import { fmtDuration } from '../lib/format'
-import { along, centroid, distM } from '../lib/geo'
+import { along, distM } from '../lib/geo'
 import { floodStepAt, isFloodResult } from '../lib/hazard'
 import { Tooltip, type HoverInfo } from './Tooltip'
 import type { Selection } from './InfoCard'
@@ -113,7 +113,6 @@ interface SplitZones {
   source: ZoneFeature[] // rising lake(s)
   peak: ZoneFeature[] // all land flooded at the peak
   steps: ZoneFeature[] // flooded land over time, ascending t_s
-  labels: { position: [number, number]; text: string }[]
 }
 const splitCache = new WeakMap<Zones, SplitZones>()
 function splitZones(z: Zones): SplitZones {
@@ -126,28 +125,9 @@ function splitZones(z: Zones): SplitZones {
     source,
     peak: of('flood'),
     steps: of('flood_step').sort((a, b) => (a.properties.t_s ?? 0) - (b.properties.t_s ?? 0)),
-    labels: lakeLabels(source),
   }
   splitCache.set(z, out)
   return out
-}
-
-/** "Lake Mendota rising" / "Lake Monona rising": one label per lake, on its largest part. Mendota lies north of the isthmus. */
-function lakeLabels(source: ZoneFeature[]) {
-  const best = new globalThis.Map<string, { position: [number, number]; size: number }>()
-  for (const f of source) {
-    const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
-    for (const poly of parts) {
-      const bb = ringsBBox([poly[0]])
-      if (!bb) continue
-      const size = distM(bb[0], bb[1])
-      if (size < 1500) continue // skip river slivers and small bays
-      const position = centroid(poly[0])
-      const name = position[1] > 43.085 ? 'Lake Mendota' : 'Lake Monona'
-      if ((best.get(name)?.size ?? 0) < size) best.set(name, { position, size })
-    }
-  }
-  return [...best].map(([name, b]) => ({ position: b.position, text: `${name} rising` }))
 }
 
 function fitView(z: Zones | null) {
@@ -322,9 +302,10 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         opacity: zoneFade,
         filled: true,
         stroked: true,
-        getFillColor: [...COLORS.lake, 46],
-        getLineColor: [...COLORS.lake, 235],
-        getLineWidth: 2,
+        // Rising lake: a quiet teal wash with a hairline edge (no neon outline).
+        getFillColor: [14, 116, 144, 64],
+        getLineColor: [56, 189, 248, 115],
+        getLineWidth: 1,
         lineWidthUnits: 'pixels',
       }),
     toggles.heatmap &&
@@ -397,11 +378,12 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         filled: true,
         stroked: true,
         // Peak view: faint, so the whole danger area shows without hiding the blocks. Timeline: the water now, a bit stronger.
-        getFillColor: [...COLORS.water, time == null ? 42 : 78],
-        getLineColor: [...COLORS.waterEdge, time == null ? 120 : 190],
+        // Flooded land: slate blue (0.35 while the timeline runs, a little lighter in Peak view) and a 1px edge.
+        getFillColor: [30, 64, 175, time == null ? 72 : 89],
+        getLineColor: [56, 189, 248, 115],
         getLineWidth: 1,
         lineWidthUnits: 'pixels',
-        updateTriggers: { getFillColor: [time == null], getLineColor: [time == null] },
+        updateTriggers: { getFillColor: [time == null] },
         transitions: { getFillColor: 300 },
       }),
     // Water sits over the block fills; redraw the block outlines on top so the blocks still read.
@@ -416,16 +398,18 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         getLineColor: (f) => (f.properties.decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
         lineWidthMinPixels: 0.6,
       }),
+    // While the timeline runs, a faint dashed line shows how far the water will reach at the peak.
     split &&
       split.peak.length > 0 &&
+      time != null &&
       new GeoJsonLayer<unknown, PathStyleExtensionProps<unknown>>({
         id: 'flood-peak',
         data: split.peak,
         opacity: zoneFade,
         filled: false,
         stroked: true,
-        getLineColor: [...COLORS.waterEdge, 200],
-        getLineWidth: 1.5,
+        getLineColor: [56, 189, 248, 70],
+        getLineWidth: 1,
         lineWidthUnits: 'pixels',
         getDashArray: [6, 4],
         dashJustified: true,
@@ -600,25 +584,6 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       stroked: true,
       lineWidthMinPixels: 4,
     }),
-    split &&
-      split.labels.length > 0 &&
-      new TextLayer({
-        id: 'lake-labels',
-        data: split.labels,
-        getPosition: (d) => d.position,
-        getText: (d) => d.text,
-        getSize: 12.5,
-        getColor: [247, 248, 248, 255],
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontWeight: 600,
-        characterSet: 'auto',
-        background: true,
-        getBackgroundColor: [15, 16, 17, 225],
-        getBorderColor: [...COLORS.lake, 220],
-        getBorderWidth: 1,
-        backgroundPadding: [6, 3, 6, 3],
-        opacity: zoneFade,
-      }),
   ].filter(Boolean)
 
   const onHover = (info: PickingInfo) => {

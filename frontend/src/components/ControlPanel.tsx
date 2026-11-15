@@ -67,22 +67,28 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
       ) : (
       <>
       <section>
-        <h3>Release point <Tip text="Derailments only happen on track, so the pin always snaps to the nearest rail line. The demo uses the line nearest the Capitol." /></h3>
-        <div className={`pick-hint ${pickHint ? 'warn' : ''}`}>
+        <h3>Release point <Tip text="Click a rail line on the map to move the derailment. It always snaps to the nearest track; the demo uses the line nearest the Capitol." /></h3>
+        {pickHint && (
+          <div className="pick-hint warn">
+            <span className="pin-dot" />
+            {pickHint}
+          </div>
+        )}
+        <div className="release-where" title={`${params.release_lat.toFixed(4)}°N, ${Math.abs(params.release_lon).toFixed(4)}°W`}>
           <span className="pin-dot" />
-          {pickHint ?? 'Click a rail line to move the derailment.'}
-        </div>
-        <div className="release-where">
-          <b>{railName ?? 'Rail line'}</b>
-          <span>{place}</span>
-          <span className="coords mono">{params.release_lat.toFixed(4)}°N, {Math.abs(params.release_lon).toFixed(4)}°W</span>
+          <span>
+            <b>{railName ?? 'Rail line'}</b>
+            <span>{place}</span>
+          </span>
         </div>
       </section>
 
       <section>
         <h3>Chemical &amp; spill <Tip text="Danger-zone distances come from the 2024 Emergency Response Guidebook. A large spill is a whole rail tank car; for chlorine at night in light wind the zone reaches 7+ miles." /></h3>
-        <Segmented label="Chemical" value={params.chemical} options={[['chlorine', 'Chlorine'], ['ammonia', 'Ammonia']]} onChange={(v) => update('chemical', v)} />
-        <Segmented label="Spill size" value={params.spill_size} options={[['small', 'Small spill'], ['large', 'Large spill']]} onChange={(v) => update('spill_size', v)} />
+        <div className="seg-row">
+          <Segmented label="Chemical" value={params.chemical} options={[['chlorine', 'Chlorine'], ['ammonia', 'Ammonia']]} onChange={(v) => update('chemical', v)} />
+          <Segmented label="Spill size" value={params.spill_size} options={[['small', 'Small'], ['large', 'Large']]} onChange={(v) => update('spill_size', v)} />
+        </div>
       </section>
 
       <section>
@@ -102,13 +108,10 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
         <h3>Response <Tip text={`Buses: Madison Metro's fleet, 60 seats each, leaving the garage 10 min after the alert. Compliance: share of people who follow the order. Contraflow: major roads run outbound only.${flood ? ' Flooded roads are closed.' : ''}`} /></h3>
         <Slider label="Buses available" value={params.bus_count} display={`${params.bus_count}`} min={0} max={80} step={1} onChange={(v) => update('bus_count', v)} />
         <Slider label="Compliance" value={params.compliance} display={`${Math.round(params.compliance * 100)}%`} min={0.6} max={1} step={0.01} onChange={(v) => update('compliance', v)} />
-        <label className="toggle">
+        <label className="toggle compact">
           <input type="checkbox" checked={params.contraflow} onChange={(e) => update('contraflow', e.target.checked)} />
           <span className="switch" />
-          <span>
-            Contraflow
-            <small>Reverse inbound lanes on main arterials</small>
-          </span>
+          <span title="Reverse inbound lanes on main arterials">Contraflow</span>
         </label>
       </section>
 
@@ -121,12 +124,12 @@ export function ControlPanel({ params, update, onRun, onReset, loading, autoRun,
         <button className="ghost" onClick={onReset} title="Reset to defaults">
           Reset
         </button>
+        <label className="toggle compact auto-run" title="Re-run automatically whenever a control changes">
+          <input type="checkbox" checked={autoRun} onChange={(e) => setAutoRun(e.target.checked)} aria-label="Auto-run on change" />
+          <span className="switch" />
+          <span>Auto</span>
+        </label>
       </div>
-      <label className="toggle compact">
-        <input type="checkbox" checked={autoRun} onChange={(e) => setAutoRun(e.target.checked)} />
-        <span className="switch" />
-        <span>Auto-run on change</span>
-      </label>
       </div>
     </aside>
   )

@@ -213,7 +213,7 @@ export default function App() {
           </svg>
           <div>
             <div className="brand-name">Isthmus</div>
-            <div className="brand-sub">Hazmat evacuation planner · Downtown Madison</div>
+            <div className="brand-sub">Emergency evacuation planner · Downtown Madison</div>
           </div>
         </div>
         <nav className="tabs" role="tablist" aria-label="Views" style={{ '--i': TABS.findIndex(([k]) => k === tab) } as React.CSSProperties}>

@@ -43,8 +43,7 @@ export function Legend({ toggles, setToggle, frequencyMax, hidden, flood = false
         <div className="legend-item"><i className="sw" style={{ background: rgb(COLORS.outside, 0.5) }} />Outside zone</div>
         {flood ? (
           <>
-            <div className="legend-item"><i className="sw water" />Flood water</div>
-            <div className="legend-item"><i className="sw flood-peak" />Flooded at the peak</div>
+            <div className="legend-item"><i className="sw water" />Flooded area</div>
             <div className="legend-item"><i className="sw lake" />Rising lake</div>
           </>
         ) : (
