@@ -92,4 +92,4 @@ have real exits. Derailments are placed only on rail lines within 2.5 km of the 
 
 - 84 unit/integration tests (`pytest engine/tests backend/tests`), including units checks (rate × time vs.
   count), road rules, waves vs. capacity, bus deadlines never violated, and fast/fallback routing agreement.
-- Robustness: findings re-checked under 7 assumption variants (`docs/findings.md` §6).
+- Robustness: findings re-checked under 7 assumption variants (`docs/findings.md` §7).

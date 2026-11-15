@@ -16,16 +16,16 @@ dashboard and Genie open in other tabs. Backup: screen recording of the ▶ Demo
 3. Click a **bus route**: "Residents without a car get pickups — each one scheduled before the gas arrives there."
 
 ## 1:20 — Live: when it breaks (30 s)
-4. **Step 4 (night, 5 buses):** "At night with 5 buses instead of 20, hundreds of people who need a ride are
-   left behind. That's the number an emergency manager needs before it happens."
+4. **Step 4 (night, 5 buses):** "At night with 5 buses instead of 20, almost 200 people who need a ride are
+   left behind — 10 buses would have reached everyone. That's the number an emergency manager needs before it happens."
 5. Press **▶ Play**: "This is the traffic simulation — you can watch where the roads back up."
 
-## 1:50 — What we found across 720 scenarios (40 s) — Planning tab or Databricks dashboard
-> "One scenario isn't a plan, so we ran 720 on Databricks — every derailment point, wind direction, wind speed
+## 1:50 — What we found across 576 scenarios (40 s) — Planning tab or Databricks dashboard
+> "One scenario isn't a plan, so we ran 576 on Databricks — every derailment point, wind direction, wind speed
 > and time of day."
-- "Capitol Lakes nursing home is in the danger zone in **65%** of them."
-- "Metro's bus garage — where every evacuation bus starts — is in it **55%** of the time."
-- "No single road is the choke point more than ~14% of the time. A fixed plan doesn't work; it has to adapt."
+- "Capitol Lakes nursing home is in the danger zone in **75%** of them."
+- "Metro's bus garage — where every evacuation bus starts — is in it **52%** of the time."
+- "No single road is the choke point more than ~16% of the time. A fixed plan doesn't work; it has to adapt."
 - Optional: ask **Genie** "Which wind direction gives the longest clearance time?"
 
 ## 2:30 — How and how honest (30 s)

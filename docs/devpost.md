@@ -26,14 +26,14 @@ about a second:
 - **A live traffic simulation** showing where and when roads back up.
 - A **guided demo**, plain-English "why?" explanations for every block and bus, and a before/after compare mode.
 
-Then we ran **720 scenarios** on Databricks to find what holds across every derailment:
+Then we ran **576 scenarios** on Databricks to find what holds across every derailment:
 
-- Capitol Lakes nursing home is inside the danger zone in **65%** of scenarios; Meriter Hospital 59%.
-- Madison Metro's bus garage — where every evacuation bus starts — is in the danger zone in **55%**.
-- In light wind it takes **103 minutes** on average to get every evacuating car out; in strong wind 39 — but
+- Capitol Lakes nursing home is inside the danger zone in **75%** of scenarios; Meriter Hospital 62%.
+- Madison Metro's bus garage — where every evacuation bus starts — is in the danger zone in **52%**.
+- In light wind it takes **105 minutes** on average to get every evacuating car out; in strong wind 40 — but
   strong wind means most people have to shelter instead.
 - Traffic jams concentrate on the south-side approaches to the Beltline (Park St / Fish Hatchery Rd), but no
-  single road is the choke point in more than ~14% of scenarios — plans have to adapt.
+  single road is the choke point in more than ~16% of scenarios — plans have to adapt.
 - With 5 buses instead of 20, a light-wind derailment near the Capitol leaves **236 of 536** residents who
   need a ride behind during the day (177 of 477 at night).
 
