@@ -34,8 +34,8 @@ Then we ran **576 scenarios** on Databricks to find what holds across every dera
   strong wind means most people have to shelter instead.
 - Traffic jams concentrate on the south-side approaches to the Beltline (Park St / Fish Hatchery Rd), but no
   single road is the choke point in more than ~16% of scenarios — plans have to adapt.
-- With 5 buses instead of 20, a light-wind derailment near the Capitol leaves **236 of 536** residents who
-  need a ride behind during the day (177 of 477 at night).
+- With 5 buses instead of 20, a light-wind derailment near the Capitol leaves **257 of 557** residents who
+  need a ride behind during the day (191 of 491 at night).
 
 ## How we built it
 

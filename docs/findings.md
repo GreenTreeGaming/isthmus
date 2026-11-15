@@ -73,8 +73,8 @@ and the derailment location.
 ## 6. Buses: enough at 20, not at 5
 
 With 20 buses, on average fewer than 2 people per scenario are left without a pickup. Cut the fleet and it
-breaks down — e.g. a derailment near the Capitol with light SW wind: during the day 536 people need a bus and
-**5 buses leave 236 behind**; at night 477 need a bus and **5 buses leave 177 behind** (10 buses still reach
+breaks down — e.g. a derailment near the Capitol with light SW wind: during the day 557 people need a bus and
+**5 buses leave 257 behind**; at night 491 need a bus and **5 buses leave 191 behind** (10 buses still reach
 everyone in both).
 
 ## 7. The findings hold when our assumptions change
