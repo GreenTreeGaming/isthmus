@@ -16,6 +16,11 @@ export const DEFAULT_PARAMS: ScenarioParams = {
   bus_capacity: 60,
   contraflow: false,
   closed_edge_ids: [],
+  hazard: 'chemical',
+  // Flood defaults (used when the hazard switch is set to Flood): both lakes, +1.5 m, peak in 6 h.
+  flood_source: 'both',
+  flood_rise_m: 1.5,
+  flood_peak_h: 6,
 }
 
 const DEBOUNCE_MS = 450

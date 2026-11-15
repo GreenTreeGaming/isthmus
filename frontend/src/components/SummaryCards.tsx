@@ -12,6 +12,8 @@ interface Props {
   summary: Summary | null
   loading: boolean
   pinned: Pinned | null
+  /** Flood result: tips say water instead of gas. */
+  flood?: boolean
 }
 
 type Better = 'lower' | 'higher' | 'neutral'
@@ -50,8 +52,21 @@ function Skeleton() {
   )
 }
 
-export function SummaryCards({ summary: s, loading, pinned }: Props) {
+export function SummaryCards({ summary: s, loading, pinned, flood = false }: Props) {
   if (!s) return <Skeleton />
+  const tips = flood
+    ? {
+        out: 'From the traffic simulation: 5 min of warning, departures in waves 10 min apart, and cars queue wherever a road is full; flooded roads are closed. Ends when the last evacuating car reaches higher ground.',
+        evac: 'People in blocks that can get out before the water arrives (5 min warning + drive time, with a 1.5x congestion margin). They leave in waves, earliest water first, toward higher ground.',
+        shelter: 'People in blocks the water would reach before they could drive out. They stay and move to an upper floor rather than drive into rising water.',
+        bus: 'Estimated from Census tables: car-free households with seniors or people with disabilities, plus nursing-home residents. An area-level estimate, never individuals. Anyone no bus can reach before the water is counted as left behind.',
+      }
+    : {
+        out: 'From the traffic simulation: 5 min of warning, departures in waves 10 min apart, and cars queue wherever a road is full. Ends when the last evacuating car reaches safety.',
+        evac: 'People in blocks that can get out before the gas arrives (5 min warning + drive time, with a 1.5x congestion margin). They leave in waves, earliest gas first.',
+        shelter: 'People in blocks the gas would reach before they could drive clear. Staying indoors with windows and vents shut is safer than being on the road.',
+        bus: 'Estimated from Census tables: car-free households with seniors or people with disabilities, plus nursing-home residents. An area-level estimate, never individuals. Anyone no bus can reach before the gas is counted as left behind.',
+      }
   const b = pinned?.summary ?? null
   const served = s.need_bus_total - s.need_bus_unserved
   const servedPct = s.need_bus_total > 0 ? served / s.need_bus_total : 1
@@ -59,33 +74,33 @@ export function SummaryCards({ summary: s, loading, pinned }: Props) {
   return (
     <div className={`hud-metrics ${loading ? 'stale' : ''}`}>
       <div className="metric lead">
-        <div className="metric-label">Everyone out in <Tip text="From the traffic simulation: 5 min of warning, departures in waves 10 min apart, and cars queue wherever a road is full. Ends when the last evacuating car reaches safety." /></div>
+        <div className="metric-label">Everyone out in <Tip text={tips.out} /></div>
         <div className="metric-value">{s.people_evacuating > 0 ? <Num value={s.sim_clearance_s} fmt={fmtDuration} /> : 'No one leaves'}</div>
         {b && <Delta from={b.sim_clearance_s} to={s.sim_clearance_s} fmt={mins} unitDiff={minsDiff} better="lower" />}
       </div>
       <div className="metric">
         <div className="metric-label">
-          <i className="dot evac" /> Evacuating <Tip text="People in blocks that can get out before the gas arrives (5 min warning + drive time, with a 1.5x congestion margin). They leave in waves, earliest gas first." />
+          <i className="dot evac" /> Evacuating <Tip text={tips.evac} />
         </div>
         <div className="metric-value"><Num value={s.people_evacuating} fmt={fmtCompact} /></div>
         {b && <Delta from={b.people_evacuating} to={s.people_evacuating} fmt={fmtCompact} unitDiff={fmtCompact} better="neutral" />}
       </div>
       <div className="metric">
         <div className="metric-label">
-          <i className="dot shelter" /> Sheltering <Tip text="People in blocks the gas would reach before they could drive clear. Staying indoors with windows and vents shut is safer than being on the road." />
+          <i className="dot shelter" /> {flood ? 'Staying' : 'Sheltering'} <Tip text={tips.shelter} />
         </div>
         <div className="metric-value"><Num value={s.people_sheltering} fmt={fmtCompact} /></div>
         {b && <Delta from={b.people_sheltering} to={s.people_sheltering} fmt={fmtCompact} unitDiff={fmtCompact} better="neutral" />}
       </div>
       <div className={`metric ${unserved ? 'danger' : ''}`}>
         <div className="metric-label">
-          <i className="dot bus" /> Need a bus <Tip text="Estimated from Census tables: car-free households with seniors or people with disabilities, plus nursing-home residents. An area-level estimate, never individuals. Anyone no bus can reach before the gas is counted as left behind." />
+          <i className="dot bus" /> Need a bus <Tip text={tips.bus} />
         </div>
         <div className="metric-value">
           <Num value={s.need_bus_total} fmt={fmtInt} />
           {unserved && <span className="metric-flag"><Num value={s.need_bus_unserved} fmt={fmtInt} /> left</span>}
         </div>
-        <div className="meter" role="img" aria-label={`${Math.round(servedPct * 100)}% picked up before the gas arrives`}>
+        <div className="meter" role="img" aria-label={`${Math.round(servedPct * 100)}% picked up before the ${flood ? 'water' : 'gas'} arrives`}>
           <span style={{ width: `${servedPct * 100}%` }} />
         </div>
         {b && <Delta from={b.need_bus_unserved} to={s.need_bus_unserved} fmt={(n) => `${fmtInt(n)} left`} unitDiff={fmtInt} better="lower" />}

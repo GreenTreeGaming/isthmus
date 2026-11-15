@@ -16,7 +16,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from engine import assumptions as A
+from typing import TYPE_CHECKING
+
 from engine.hazard import Hazard
+
+if TYPE_CHECKING:
+    from engine.flood import FloodHazard
 from engine.network import Network
 
 SINK_EDGE = -1
@@ -82,7 +87,7 @@ def _reaches_exit(n: int, tails, heads, exits) -> np.ndarray:
     return seen
 
 
-def build_evac_graph(net: Network, hz: Hazard, closed_edge_ids=(), contraflow: bool = False) -> EvacGraph:
+def build_evac_graph(net: Network, hz: "Hazard | FloodHazard", closed_edge_ids=(), contraflow: bool = False) -> EvacGraph:
     G = net.G
     closed = set(closed_edge_ids)
     all_nodes = np.array(list(G.nodes))
@@ -91,6 +96,10 @@ def build_evac_graph(net: Network, hz: Hazard, closed_edge_ids=(), contraflow: b
     in_region = dict(zip(all_nodes.tolist(), hz.in_region(xs, ys).tolist()))
     in_zone = dict(zip(all_nodes.tolist(), hz.in_zone(xs, ys).tolist()))
     dist = dict(zip(all_nodes.tolist(), hz.distance(xs, ys).tolist()))
+    if getattr(hz, "kind", "") == "flood":
+        from engine.flood import elevated_nodes
+        for n in elevated_nodes(net):
+            in_zone[n] = False                # raised highways stay above the water
 
     # Exits: outside the buffered region, adjacent to a region node.
     exits = {v for u, v in G.edges if in_region[u] and not in_region[v]}
@@ -128,7 +137,7 @@ def build_evac_graph(net: Network, hz: Hazard, closed_edge_ids=(), contraflow: b
         tt = d["travel_time_s"]
         arc = (index[u], index[v], cap, tt, d["edge_id"])
         if in_zone[u] or in_zone[v]:
-            if dist[v] >= dist[u] - A.AWAY_TOLERANCE_M:
+            if dist[v] >= dist[u] - hz.away_tol:
                 away.append(arc + (tt * A.HAZARD_COST_MULT,))
             else:
                 toward.append(arc + (tt * A.TOWARD_COST_MULT,))

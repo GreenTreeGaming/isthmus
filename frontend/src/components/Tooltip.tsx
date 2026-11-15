@@ -2,6 +2,7 @@ import type { BlockFeature, BlockFrequency, Bus, EdgeFeature, ScenarioResponse }
 import type { BusStop, Derived } from '../lib/derive'
 import { COLORS, blockColor, loadColor, rgb } from '../lib/colors'
 import { fmtClock, fmtDuration, fmtInt, fmtPct } from '../lib/format'
+import { isFloodResult } from '../lib/hazard'
 
 export interface HoverInfo {
   x: number
@@ -30,6 +31,8 @@ function Row({ k, v, tone }: { k: string; v: React.ReactNode; tone?: 'bad' | 'go
 }
 
 function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
+  const flood = isFloodResult(result)
+  const hz = flood ? 'water' : 'plume'
   switch (info.layer) {
     case 'block-frequency': {
       const id = (info.object as { properties: { block_id: string } }).properties.block_id
@@ -48,7 +51,7 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
     case 'blocks': {
       const p = (info.object as BlockFeature).properties
       const label =
-        p.decision === 'shelter' ? 'Shelter in place' : p.decision === 'evacuate' ? `Evacuate · wave ${(p.wave ?? 0) + 1}` : 'Outside the zone'
+        p.decision === 'shelter' ? (flood ? 'Stay, move to an upper floor' : 'Shelter in place') : p.decision === 'evacuate' ? `Evacuate · wave ${(p.wave ?? 0) + 1}` : 'Outside the zone'
       return (
         <>
           <div className="tt-title">
@@ -58,7 +61,7 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
           <div className="tt-sub">Census block {p.block_id}</div>
           {p.decision !== 'outside' && (
             <>
-              <Row k="Plume arrives" v={fmtDuration(p.plume_arrival_s)} />
+              <Row k={flood ? 'Water arrives' : 'Plume arrives'} v={fmtDuration(p.plume_arrival_s)} />
               <Row k="Est. time to get out" v={fmtDuration(p.est_exit_time_s)} tone={p.est_exit_time_s != null && p.plume_arrival_s != null && p.est_exit_time_s > p.plume_arrival_s ? 'bad' : undefined} />
             </>
           )}
@@ -105,7 +108,7 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
           <Row k="Stops" v={b.stops.length} />
           <Row k="Peak on board" v={fmtInt(picked)} />
           <Row k="Arrives at shelter" v={fmtClock(b.arrival_s.at(-1) ?? 0)} />
-          <div className="tt-foot">Click for every stop's pickup time vs. when the gas arrives.</div>
+          <div className="tt-foot">Click for every stop's pickup time vs. when the {flood ? 'water' : 'gas'} arrives.</div>
         </>
       )
     }
@@ -116,10 +119,10 @@ function Body({ info, result, derived, edgeLoadNow, time, frequency }: Props) {
         <>
           <div className="tt-title">
             {title} · Bus {s.bus_id + 1}
-            {s.kind === 'pickup' && s.deadline_s != null && (s.late ? <span className="pill bad">after plume</span> : <span className="pill good">before plume</span>)}
+            {s.kind === 'pickup' && s.deadline_s != null && (s.late ? <span className="pill bad">after {hz}</span> : <span className="pill good">before {hz}</span>)}
           </div>
           <Row k="Bus arrives" v={fmtClock(s.arrival_s)} />
-          {s.kind === 'pickup' && <Row k="Pickup deadline (plume)" v={s.deadline_s == null ? '—' : fmtClock(s.deadline_s)} tone={s.late ? 'bad' : 'good'} />}
+          {s.kind === 'pickup' && <Row k={`Pickup deadline (${hz})`} v={s.deadline_s == null ? '—' : fmtClock(s.deadline_s)} tone={s.late ? 'bad' : 'good'} />}
           <Row k="On board after stop" v={fmtInt(s.load)} />
         </>
       )

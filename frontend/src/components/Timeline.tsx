@@ -50,9 +50,12 @@ export function Timeline({ time, setTime, duration, playing, setPlaying, clearan
   const pct = (t / duration) * 100
   const clearPct = clearance ? Math.min(100, (clearance / duration) * 100) : null
 
-  const tickStep = duration > 7200 ? 1800 : duration > 3600 ? 900 : 600
+  // Floods run for hours: past 4 h the ticks switch to whole hours so they stay readable.
+  const tickStep =
+    duration > 43200 ? 10800 : duration > 21600 ? 7200 : duration > 14400 ? 3600 : duration > 7200 ? 1800 : duration > 3600 ? 900 : 600
   const ticks: number[] = []
   for (let x = 0; x <= duration; x += tickStep) ticks.push(x)
+  const tickLabel = (x: number) => (tickStep >= 3600 ? `${x / 3600}h` : `${Math.round(x / 60)}′`)
 
   return (
     <div className={`panel timeline ${playing ? 'is-playing' : ''}`}>
@@ -89,7 +92,7 @@ export function Timeline({ time, setTime, duration, playing, setPlaying, clearan
         )}
         <div className="ticks" aria-hidden>
           {ticks.map((x) => (
-            <span key={x} style={{ left: `${(x / duration) * 100}%` }}>{Math.round(x / 60)}′</span>
+            <span key={x} style={{ left: `${(x / duration) * 100}%` }}>{tickLabel(x)}</span>
           ))}
         </div>
       </div>

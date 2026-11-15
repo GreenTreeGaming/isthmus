@@ -78,6 +78,16 @@ AWAY_TOLERANCE_M = 25             # an edge counts as "away" unless it gets this
 HAZARD_COST_MULT = 5.0            # routing cost multiplier for edges inside the zone
 TOWARD_COST_MULT = 20.0           # fallback: toward-release edges, only if a node has no other way out
 
+# --------------------------------------------------------------------------- flood (engine/flood.py, data/flood_dem.py)
+# The lake(s) rise linearly from their normal level to +flood_rise_m over flood_peak_h hours after the alert.
+FLOOD_MIN_RISE_M = 0.05           # land below the normal lake level that connects to the lake floods at the first 5 cm
+FLOOD_AWAY_TOLERANCE_M = 0.02     # inside the flood zone an edge is "away" unless it goes 2 cm (of rise) lower
+FLOOD_DISTANCE_CAP_M = 50.0       # ground the lakes can't reach counts as 50 m of rise away
+FLOOD_STEPS = 8                   # water-extent snapshots sent to the map for animation
+# The elevation data is bare earth (bridges and raised roadbeds removed), so highways on bridges and
+# embankments would look like marsh. Intersections that only touch these road classes never flood.
+FLOOD_ELEVATED_CLASSES = ("motorway", "motorway_link", "trunk", "trunk_link")
+
 # DOT Emergency Response Guidebook (ERG) 2024, as published on NOAA CAMEO Chemicals
 # (cameochemicals.noaa.gov/unna/1017 chlorine, /unna/1005 anhydrous ammonia).
 # Small spills: Table 1. Large spills: Table 3, RAIL TANK CAR row (our scenario is a derailment).

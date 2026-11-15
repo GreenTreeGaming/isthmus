@@ -144,9 +144,8 @@ def run_row(row, net: Network, bus_time_limit_s: float = 0.3) -> dict:
                    evacuate_block_ids="[]", facilities_in_zone="[]", garage_in_zone=None, jam_edge_ids="[]")
         return out
     s = r.summary
-    from engine.hazard import build_hazard
-    hz = build_hazard(net, p.release_lon, p.release_lat, p.chemical, p.spill_size, p.time_of_day,
-                      p.wind_from_deg, p.wind_speed_mps)
+    from engine.scenario import make_hazard
+    hz = make_hazard(net, p)
     hz_fac = []
     if not net.facilities.empty:
         inside = hz.in_zone(net.facilities["x"].to_numpy(), net.facilities["y"].to_numpy())

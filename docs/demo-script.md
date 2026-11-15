@@ -20,7 +20,13 @@ dashboard and Genie open in other tabs. Backup: screen recording of the ▶ Demo
    left behind — 10 buses would have reached everyone. That's the number an emergency manager needs before it happens."
 5. Press **▶ Play**: "This is the traffic simulation — you can watch where the roads back up."
 
-## 1:50 — What we found across 576 scenarios (40 s) — Planning tab or Databricks dashboard
+## 1:45 — Floods too (15 s), demo step 5
+6. **Step 5 (both lakes +1.5 m over 6 h):** "Same engine, second hazard. Heavy rain raises both lakes. Water
+   follows the real terrain up the Yahara River across the east isthmus: about 10,600 people evacuate and 2,100
+   stay and move upstairs. And at just half a meter, Metro's bus garage is underwater — the same garage that's
+   in the chemical danger zone half the time."
+
+## 2:00 — What we found across 576 scenarios (30 s) — Planning tab or Databricks dashboard
 > "One scenario isn't a plan, so we ran 576 on Databricks — every derailment point, wind direction, wind speed
 > and time of day."
 - "Capitol Lakes nursing home is in the danger zone in **75%** of them."
@@ -41,4 +47,7 @@ dashboard and Genie open in other tabs. Backup: screen recording of the ▶ Demo
   are safer indoors — that's also the guidebook's advice.
 - **"Are these real shelters?"** Candidate large public buildings, not official designations — next step is
   plugging in the city's list.
+- **"How do you model the flood?"** USGS elevation; a priority-flood finds how far each lake must rise before
+  water can actually flow to each spot (it can't jump over higher ground). It's a lake-level "bathtub" model —
+  no rainfall runoff or storm sewers — so it's an upper bound on where water can reach.
 - **"Where's Databricks?"** Batch runs, Delta tables, the AI/BI dashboard and the Genie agent.

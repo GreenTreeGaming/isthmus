@@ -72,3 +72,26 @@ for name in ["top_bottlenecks", "facilities_in_zone", "worst_wind", "by_time_of_
       .option("overwriteSchema", "true").saveAsTable("workspace.isthmus.gold_block_frequency"))
 print("Metro garage inside the danger zone in", round(ins["garage_in_zone_share"] * 100, 1), "% of scenarios")
 display(pd.DataFrame(ins["top_bottlenecks"]))
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Floods: when the lakes rise
+# MAGIC Lake Mendota, Lake Monona (+ Yahara River) or both × rise 0.5–3 m × peak in 3 or 12 h × night / day / game day
+# MAGIC = **90 scenarios**, using the flood grid in `data/silver/flood_grid.npz` (USGS 3DEP elevation + priority-flood).
+# MAGIC Plus thresholds: how far the lakes must rise before the Metro garage, shelters, hospitals and major roads flood.
+
+# COMMAND ----------
+
+from engine.flood_batch import flood_grid, flood_insights, run_flood_row
+
+fgrid = flood_grid()
+fres = pd.DataFrame([run_flood_row(r, net) for _, r in fgrid.iterrows()])
+(spark.createDataFrame(fres).write.mode("overwrite").option("overwriteSchema", "true")
+      .saveAsTable("workspace.isthmus.flood_results"))
+fins = flood_insights(fres, net)
+for name in ["by_rise", "by_source", "facilities", "roads"]:
+    (spark.createDataFrame(pd.DataFrame(fins[name])).write.mode("overwrite")
+          .option("overwriteSchema", "true").saveAsTable(f"workspace.isthmus.gold_flood_{name}"))
+print("failed:", fres["error"].notna().sum(), "| Metro garage floods at +", fins["garage_flood_rise_m"], "m")
+display(pd.DataFrame(fins["roads"]))

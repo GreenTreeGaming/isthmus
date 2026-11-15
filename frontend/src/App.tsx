@@ -15,12 +15,13 @@ import { CAPITOL, DEMO_STEPS } from './lib/demo'
 import { derive } from './lib/derive'
 import { planStory } from './lib/story'
 import { DEFAULT_TIMING, type WaveTiming } from './lib/explain'
+import { fmtRise, isFloodParams, isFloodResult } from './lib/hazard'
 import { nearLandmark, nearestRailName, snapToRail } from './lib/geo'
 // Secondary tabs load on first visit, keeping charts out of the map's start-up bundle.
 const AssumptionsTab = lazy(() => import('./tabs/AssumptionsTab').then((m) => ({ default: m.AssumptionsTab })))
 const HowItWorksTab = lazy(() => import('./tabs/HowItWorksTab').then((m) => ({ default: m.HowItWorksTab })))
 const PlanningTab = lazy(() => import('./tabs/PlanningTab').then((m) => ({ default: m.PlanningTab })))
-import type { BlockFrequency, BlockGeoCollection, RailCollection, ScenarioParams } from './types'
+import type { BlockFrequency, BlockGeoCollection, RailCollection, ScenarioParams, ScenarioResponse } from './types'
 import { DEFAULT_PARAMS, useScenario } from './useScenario'
 
 type Tab = 'live' | 'how' | 'planning' | 'assumptions'
@@ -39,7 +40,9 @@ const TABS: [Tab, string][] = [
 ]
 
 const TOD_SHORT: Record<string, string> = { night: 'Night', day: 'Day', gameday: 'Game day' }
-function shortLabel(p: ScenarioParams) {
+function shortLabel(p: ScenarioResponse['params']) {
+  if (p.hazard === 'flood')
+    return `${TOD_SHORT[p.time_of_day]}, ${fmtRise(p.flood_rise_m ?? 0)} in ${p.flood_peak_h ?? 0} h, ${p.bus_count} buses${p.contraflow ? ', contraflow' : ''}`
   return `${TOD_SHORT[p.time_of_day]}, ${p.wind_speed_mps} m/s, ${p.bus_count} buses${p.contraflow ? ', contraflow' : ''}`
 }
 
@@ -163,22 +166,24 @@ export default function App() {
   if (result && !loading && result !== fitFor && (demo != null || fitFor == null)) setFitFor(result)
 
   const derived = useMemo(() => (result && blockGeo ? derive(result, blockGeo) : null), [result, blockGeo])
+  // Wording follows what is on screen (the last result); the controls follow the params being edited.
+  const resultFlood = isFloodResult(result)
 
   // A new result may be shorter than the current timeline position.
   const timeInRange = time != null && derived ? Math.min(time, derived.duration_s) : time
 
+  const floodControls = isFloodParams(params)
   const onPickRelease = useCallback(
     (lon: number, lat: number) => {
-      if (!rail) return
+      if (!rail || floodControls) return // a flood has no derailment pin
       // Derailments only happen on track: always snap to the nearest rail line.
       const snap = snapToRail(rail, lon, lat)
       if (!snap) return
       setPickHint(snap[2] > 150 ? 'Snapped to the nearest rail line.' : null)
       setParams((p) => ({ ...p, release_lon: +snap[0].toFixed(6), release_lat: +snap[1].toFixed(6) }))
     },
-    [rail, setParams],
+    [rail, floodControls, setParams],
   )
-
   useEffect(() => {
     if (!pickHint || !rail) return
     const id = window.setTimeout(() => setPickHint(null), 4000)
@@ -265,7 +270,7 @@ export default function App() {
             params={params}
             update={update}
             onRun={() => void run()}
-            onReset={() => setParams(DEFAULT_PARAMS)}
+            onReset={() => setParams((p) => ({ ...DEFAULT_PARAMS, hazard: p.hazard }))}
             loading={loading}
             autoRun={autoRun}
             setAutoRun={setAutoRun}
@@ -316,7 +321,7 @@ export default function App() {
                 </button>
               )}
             </ScenarioStrip>
-            <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} />
+            <SummaryCards summary={result?.summary ?? null} loading={loading} pinned={pinned} flood={resultFlood} />
             </div>
           </div>
           {selection && result && (
@@ -326,6 +331,7 @@ export default function App() {
               buses={result.buses}
               derived={derived}
               timing={timing}
+              flood={resultFlood}
               onClose={() => setSelection(null)}
               onHoverBus={setHoveredBus}
             />
@@ -335,6 +341,7 @@ export default function App() {
             toggles={toggles}
             setToggle={(k, v) => setToggles((t) => ({ ...t, [k]: v }))}
             frequencyMax={frequency ? frequency.max : null}
+            flood={resultFlood}
           />
           {demo != null && <DemoBar steps={DEMO_STEPS} index={demo} onGo={goDemo} onExit={exitDemo} loading={loading} summary={result?.summary ?? null} baseline={pinned?.summary ?? null} />}
           {derived && (

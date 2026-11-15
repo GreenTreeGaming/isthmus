@@ -16,6 +16,10 @@ export const COLORS = {
   bus: [57, 135, 229] as const,
   onTime: [52, 199, 120] as const,
   late: [255, 84, 84] as const,
+  // Flood: cyan water (kept apart from the royal-blue bus routes), a deeper blue for the rising lake.
+  water: [34, 180, 220] as const,
+  waterEdge: [120, 215, 245] as const,
+  lake: [70, 170, 245] as const,
 }
 
 export function blockColor(p: BlockProps, alpha = 150): RGBA {

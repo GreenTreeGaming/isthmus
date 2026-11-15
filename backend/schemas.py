@@ -22,6 +22,10 @@ class ScenarioParamsIn(BaseModel):
     contraflow: bool = False
     closed_edge_ids: list[int] = Field(default_factory=list)
     seed: int = 0
+    hazard: Literal["chemical", "flood"] = "chemical"
+    flood_source: Literal["mendota", "monona", "both"] = "both"
+    flood_rise_m: float = Field(1.0, gt=0, le=5)
+    flood_peak_h: float = Field(6.0, gt=0, le=72)
 
     def to_engine(self) -> ScenarioParams:
         data = self.model_dump()
@@ -45,4 +49,8 @@ def params_to_json(p: ScenarioParams) -> dict:
         "bus_capacity": p.bus_capacity,
         "contraflow": p.contraflow,
         "closed_edge_ids": list(p.closed_edge_ids),
+        "hazard": getattr(p, "hazard", "chemical"),
+        "flood_source": getattr(p, "flood_source", "both"),
+        "flood_rise_m": getattr(p, "flood_rise_m", 1.0),
+        "flood_peak_h": getattr(p, "flood_peak_h", 6.0),
     }

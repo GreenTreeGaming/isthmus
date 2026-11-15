@@ -1,5 +1,6 @@
 import type { BlockFeature, BlockGeoCollection, Bus, BlockProps, ScenarioResponse } from '../types'
 import { along, centroid } from './geo'
+import { floodPeakS } from './hazard'
 
 export interface BlockPoint {
   position: [number, number]
@@ -76,7 +77,10 @@ export function derive(r: ScenarioResponse, geo: BlockGeoCollection): Derived {
   const step_s = r.timeline.step_s || 30
   const nSteps = Math.max(0, ...Object.values(r.timeline.edge_load).map((a) => a.length))
   const lastBus = Math.max(0, ...r.buses.map((b) => b.arrival_s.at(-1) ?? 0))
-  const duration_s = Math.max(nSteps * step_s, r.summary.clearance_time_s ?? 0, r.summary.sim_clearance_s ?? 0, lastBus, 600)
+  // Floods unfold over hours: stretch the timeline to the water's peak so the rise can be watched,
+  // but cap it at 12 h (a 48 h peak would squeeze the whole traffic simulation into the first few pixels).
+  const flood_peak_s = Math.min(floodPeakS(r), 12 * 3600)
+  const duration_s = Math.max(nSteps * step_s, r.summary.clearance_time_s ?? 0, r.summary.sim_clearance_s ?? 0, lastBus, flood_peak_s, 600)
   return { blockFeatures, blockPoints, stops, busLate, duration_s, step_s, nSteps }
 }
 

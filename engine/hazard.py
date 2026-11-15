@@ -28,6 +28,8 @@ class Hazard:
     protect: shapely.Polygon       # metric
     zone: shapely.Geometry         # isolation ∪ protect, metric
     region: shapely.Geometry       # zone buffered by EXIT_BUFFER_M — exits sit outside this
+    kind = "chemical"
+    away_tol = A.AWAY_TOLERANCE_M  # meters closer to the release before an edge counts as "toward"
 
     def in_zone(self, x, y) -> np.ndarray:
         return shapely.contains_xy(self.zone, np.asarray(x, float), np.asarray(y, float))
@@ -37,6 +39,9 @@ class Hazard:
 
     def distance(self, x, y) -> np.ndarray:
         return np.hypot(np.asarray(x, float) - self.rx, np.asarray(y, float) - self.ry)
+
+    def geo_distance(self, x, y) -> np.ndarray:
+        return self.distance(x, y)
 
     def downwind(self, x, y) -> np.ndarray:
         return (np.asarray(x, float) - self.rx) * self.ux + (np.asarray(y, float) - self.ry) * self.uy

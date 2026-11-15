@@ -103,11 +103,20 @@ def _deadlines(r: Any) -> list[float | None]:
 
 
 def result_to_response(result: ScenarioResult, lk: Lookup, step_s: int | None = None) -> dict[str, Any]:
+    flood = getattr(result.params, "hazard", "chemical") == "flood"
     zones = {"type": "FeatureCollection", "features": [
         {"type": "Feature", "properties": {"kind": kind}, "geometry": mapping(wkt.loads(text))}
-        for kind, text in (("isolation", result.isolation_zone_wkt), ("protect", result.protect_zone_wkt))
+        for kind, text in (("isolation", result.isolation_zone_wkt),
+                           ("flood" if flood else "protect", result.protect_zone_wkt),
+                           ("flood_source", getattr(result, "flood_source_wkt", "")))
         if text
     ]}
+    # Flood only: water extent over time (cumulative), for animating the rise on the timeline.
+    for st in getattr(result, "flood_steps", None) or []:
+        if st.wkt:
+            zones["features"].append({"type": "Feature",
+                                      "properties": {"kind": "flood_step", "t_s": _num(st.t_s), "rise_m": _num(st.rise_m, 2)},
+                                      "geometry": mapping(wkt.loads(st.wkt))})
 
     # Block geometry is static and served once by GET /blocks; here only per-run properties, keyed by id.
     blocks: dict[str, dict[str, Any]] = {}

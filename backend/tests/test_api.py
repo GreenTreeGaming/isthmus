@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from backend import config
 from backend.assumptions_view import describe, json_safe
 from backend.convert import Lookup, blocks_geojson, result_to_response
-from contracts.engine_api import (BlockResult, BusRoute, EdgeLoad, ScenarioParams, ScenarioResult,
+from contracts.engine_api import (BlockResult, BusRoute, EdgeLoad, FloodStep, ScenarioParams, ScenarioResult,
                                   Summary)
 
 CONTRACT = json.loads(config.CONTRACT_RESPONSE.read_text())
@@ -159,6 +159,28 @@ def test_converter_matches_contract():
     geo = blocks_geojson(lk)
     assert geo["features"][0]["properties"] == {"block_id": "b1"}
     assert geo["features"][0]["geometry"]["coordinates"][0][0] == [0.123457, 0.0]
+
+
+def test_converter_flood_zones():
+    sq = "POLYGON((-89.38 43.07,-89.37 43.07,-89.37 43.08,-89.38 43.07))"
+    p = ScenarioParams(release_lon=-89.38, release_lat=43.07, hazard="flood", flood_source="mendota",
+                       flood_rise_m=1.5, flood_peak_h=6.0)
+    res = ScenarioResult(params=p, isolation_zone_wkt="", protect_zone_wkt=sq, blocks=[], edges=[], buses=[],
+                         summary=Summary(0, 0, 0, 0, 0, [], 1), flood_source_wkt=sq,
+                         flood_steps=[FloodStep(10800.0, 0.75, sq), FloodStep(21600.0, 1.5, sq)])
+    out = result_to_response(res, Lookup(), step_s=30)
+    kinds = [f["properties"]["kind"] for f in out["zones"]["features"]]
+    assert kinds == ["flood", "flood_source", "flood_step", "flood_step"]
+    assert out["zones"]["features"][2]["properties"] == {"kind": "flood_step", "t_s": 10800.0, "rise_m": 0.75}
+    assert out["params"]["hazard"] == "flood" and out["params"]["flood_rise_m"] == 1.5
+
+
+def test_simulate_accepts_flood_params(client):
+    r = client.post("/simulate", json={**BODY, "hazard": "flood", "flood_source": "both", "flood_rise_m": 1.5,
+                                        "flood_peak_h": 6})
+    assert r.status_code == 200
+    assert client.post("/simulate", json={**BODY, "hazard": "tsunami"}).status_code == 422
+    assert client.post("/simulate", json={**BODY, "hazard": "flood", "flood_rise_m": 0}).status_code == 422
 
 
 def test_converter_deadlines_missing_or_mismatched():

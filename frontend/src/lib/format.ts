@@ -28,3 +28,12 @@ export function compass(deg: number): string {
   const names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
   return names[Math.round((((deg % 360) + 360) % 360) / 22.5) % 16]
 }
+
+/** Spoken-style span for sentences: 540 -> "9 min", 11400 -> "3 h 10 min", 7200 -> "2 h". */
+export function fmtSpan(s: number | null | undefined): string {
+  if (s == null || !isFinite(s)) return '—'
+  const m = Math.max(0, Math.round(s / 60))
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`
+}

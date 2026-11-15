@@ -14,7 +14,7 @@ from pyproj import Transformer
 from engine import assumptions as A
 
 CACHE_NAME = "_network_cache.pkl"
-CACHE_VERSION = 3
+CACHE_VERSION = 4
 
 _TO_METRIC = Transformer.from_crs("EPSG:4326", A.METRIC_CRS, always_xy=True)
 _TO_LONLAT = Transformer.from_crs(A.METRIC_CRS, "EPSG:4326", always_xy=True)
@@ -44,6 +44,7 @@ class Network:
     depots: pd.DataFrame
     rails: list
     erg: dict[tuple[str, str, str], tuple[float, float]]
+    flood: object | None = None    # engine.flood.FloodGrid from flood_grid.npz (lake-flood hazard), if present
     edge_uv: dict[int, tuple[int, int]] = field(default_factory=dict)
     edge_coords: dict[int, list[list[float]]] = field(default_factory=dict)
 
@@ -226,15 +227,20 @@ def build_network(data_dir: str | Path) -> Network:
     return Network(
         G=G, blocks=blocks.reset_index(drop=True), facilities=facilities.reset_index(drop=True),
         pickups=pickups.reset_index(drop=True), depots=depots.reset_index(drop=True),
-        rails=rail_geoms, erg=erg, edge_uv=edge_uv, edge_coords=edge_coords,
+        rails=rail_geoms, erg=erg, edge_uv=edge_uv, edge_coords=edge_coords, flood=_flood(d),
     )
+
+
+def _flood(d: Path):
+    from engine.flood import load_flood_grid      # lazy: engine.flood imports this module
+    return load_flood_grid(d / "flood_grid.npz")
 
 
 def load_network(data_dir: str | Path, use_cache: bool = True) -> Network:
     """Build the network from silver Parquet, reusing a pickle cache when the inputs haven't changed."""
     d = Path(data_dir)
     cache = d / CACHE_NAME
-    newest = max((p.stat().st_mtime for p in d.glob("*.parquet")), default=0.0)
+    newest = max((p.stat().st_mtime for p in [*d.glob("*.parquet"), *d.glob("*.npz")]), default=0.0)
     if use_cache and cache.exists() and cache.stat().st_mtime >= newest:
         try:
             with cache.open("rb") as f:

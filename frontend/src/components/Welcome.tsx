@@ -47,6 +47,7 @@ export function Welcome({ onDemo, onClose, onHowItWorks }: Props) {
               <li><i className="sw zone" /><span><b>Red circle and dashed square:</b> the official danger zone (DOT Emergency Response Guidebook).</span></li>
               <li><i className="line glow" /><span><b>Thick dashed roads:</b> choke points, where traffic backs up.</span></li>
               <li><i className="line bus" /><span><b>Blue dashed lines:</b> bus routes picking up residents who need a ride.</span></li>
+              <li><i className="sw water" /><span><b>Flood mode, light blue:</b> water spreading from the rising lakes. Purple blocks there stay and move to an upper floor.</span></li>
             </ul>
           </section>
         </div>
@@ -54,8 +55,8 @@ export function Welcome({ onDemo, onClose, onHowItWorks }: Props) {
         <section className="welcome-try">
           <h2>Try it</h2>
           <ol>
-            <li><b>▶ Demo</b> walks through four scenarios in about a minute.</li>
-            <li><b>Click a rail line</b> to move the derailment; change wind, time of day or buses on the left.</li>
+            <li><b>▶ Demo</b> walks through five scenarios in about a minute.</li>
+            <li><b>Click a rail line</b> to move the derailment; change wind, time of day or buses on the left. Switch the hazard to <b>Flood</b> to raise the lakes instead.</li>
             <li><b>Click any colored block or bus route</b> to see why it got its instruction.</li>
             <li><b>Press Play</b> on the timeline to watch the traffic simulation unfold.</li>
           </ol>

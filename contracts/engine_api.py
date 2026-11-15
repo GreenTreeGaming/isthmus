@@ -15,11 +15,13 @@ Chemical = Literal["chlorine", "ammonia"]
 SpillSize = Literal["small", "large"]
 TimeOfDay = Literal["night", "day", "gameday"]
 Decision = Literal["evacuate", "shelter", "outside"]
+HazardType = Literal["chemical", "flood"]
+FloodSource = Literal["mendota", "monona", "both"]
 
 
 @dataclass(frozen=True)
 class ScenarioParams:
-    release_lon: float
+    release_lon: float                    # chemical: derailment point. flood: ignored (send any point)
     release_lat: float
     chemical: Chemical = "chlorine"
     spill_size: SpillSize = "large"
@@ -32,13 +34,18 @@ class ScenarioParams:
     contraflow: bool = False
     closed_edge_ids: tuple[int, ...] = ()
     seed: int = 0                         # for any randomness, so batch runs are reproducible
+    # --- hazard type. "chemical" uses release point, chemical, spill and wind. "flood" uses the fields below.
+    hazard: HazardType = "chemical"
+    flood_source: FloodSource = "both"    # which lake rises: Mendota, Monona (+ Yahara River below it), or both
+    flood_rise_m: float = 1.0             # how far the lake(s) rise above their normal level at the peak
+    flood_peak_h: float = 6.0             # hours from the alert until the water peaks (rises linearly)
 
 
 @dataclass
 class BlockResult:
     block_id: str
     decision: Decision
-    plume_arrival_s: float | None         # None if outside plume
+    plume_arrival_s: float | None         # when the hazard arrives (gas, or flood water); None if it never does
     est_exit_time_s: float | None
     wave: int | None                      # departure wave index (0 = first), None if not evacuating
     drivers: float
@@ -81,16 +88,25 @@ class Summary:
 
 
 @dataclass
+class FloodStep:
+    t_s: float                            # time since the alert
+    rise_m: float                         # lake rise above normal at that time
+    wkt: str                              # flooded land at that time, WGS84 (cumulative)
+
+
+@dataclass
 class ScenarioResult:
     params: ScenarioParams
-    isolation_zone_wkt: str               # circle, WGS84
-    protect_zone_wkt: str                 # downwind polygon, WGS84
+    isolation_zone_wkt: str               # chemical: circle, WGS84. flood: "" (none)
+    protect_zone_wkt: str                 # chemical: downwind polygon. flood: all land flooded at the peak. WGS84
     blocks: list[BlockResult]
     edges: list[EdgeLoad]                 # only edges with flow > 0 or bottlenecks
     buses: list[BusRoute]
     summary: Summary
     load_timeline: dict[int, list[float]] = field(default_factory=dict)
     # edge_id -> load ratio per sim step (step = SIM_STEP_S in assumptions). Optional, for animation.
+    flood_source_wkt: str = ""            # flood only: the lake(s) that rise, WGS84
+    flood_steps: list[FloodStep] = field(default_factory=list)   # flood only: water extent over time
 
 
 def load_network(data_dir: str) -> object:

@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 import shapely
 
-from contracts.engine_api import BlockResult, EdgeLoad, ScenarioParams, ScenarioResult, Summary
+from contracts.engine_api import BlockResult, EdgeLoad, FloodStep, ScenarioParams, ScenarioResult, Summary
 from engine import assumptions as A
 from engine.buses import Stop, plan_buses, to_people
 from engine.decisions import EVACUATE, SHELTER, decide, estimate_exit_s, walk_time_s
 from engine.evacgraph import EvacGraph, build_evac_graph
+from engine.flood import FloodHazard, build_flood_hazard
 from engine.flow import FlowResult, solve_flow
 from engine.hazard import Hazard, build_hazard
 from engine.network import Network
@@ -52,8 +53,7 @@ def run_with_diagnostics(params: ScenarioParams, net: Network) -> tuple[Scenario
         lap[0] = now
 
     # ---- hazard + roads
-    hz = build_hazard(net, params.release_lon, params.release_lat, params.chemical, params.spill_size,
-                      params.time_of_day, params.wind_from_deg, params.wind_speed_mps)
+    hz = make_hazard(net, params)
     eg = build_evac_graph(net, hz, params.closed_edge_ids, params.contraflow)
     diag.relaxed_road_rules, diag.unreachable_nodes = eg.relaxed, len(eg.unreachable)
     mark("hazard+graph")
@@ -163,7 +163,18 @@ def run_with_diagnostics(params: ScenarioParams, net: Network) -> tuple[Scenario
     result = ScenarioResult(params=params, isolation_zone_wkt=iso_wkt, protect_zone_wkt=prot_wkt,
                             blocks=blocks_out, edges=edges_out, buses=bus_plan.routes, summary=summary,
                             load_timeline=timeline)
+    if isinstance(hz, FloodHazard):
+        result.flood_source_wkt = hz.grid.lake_wkt.get(hz.source, "")
+        result.flood_steps = [FloodStep(t_s=t, rise_m=h, wkt=w) for t, h, w in hz.steps]
     return result, diag
+
+
+def make_hazard(net: Network, params: ScenarioParams) -> Hazard | FloodHazard:
+    """The danger zone and arrival times for this scenario: chemical gas zone (ERG) or lake flood."""
+    if params.hazard == "flood":
+        return build_flood_hazard(net, params.flood_source, params.flood_rise_m, params.flood_peak_h)
+    return build_hazard(net, params.release_lon, params.release_lat, params.chemical, params.spill_size,
+                        params.time_of_day, params.wind_from_deg, params.wind_speed_mps)
 
 
 def _plan(eg: EvacGraph, pop: pd.DataFrame, decision: np.ndarray, arrival: np.ndarray,
@@ -190,13 +201,16 @@ def _plan(eg: EvacGraph, pop: pd.DataFrame, decision: np.ndarray, arrival: np.nd
     return flow, waves, node_tt
 
 
-def _buses(net: Network, hz: Hazard, eg: EvacGraph, sim, pop: pd.DataFrame, decision, arrival, ff_node,
+def _buses(net: Network, hz: Hazard | FloodHazard, eg: EvacGraph, sim, pop: pd.DataFrame, decision, arrival, ff_node,
            params: ScenarioParams):
     G = net.G
     # congested travel time per edge (free-flow + average queue delay while buses are out)
     edge_time = {int(eg.edge_id[a]): float(eg.tt_s[a] + sim.mean_delay_s[a]) for a in range(len(eg.tails))}
     nodes = list(G.nodes)
     nz = dict(zip(nodes, hz.in_zone([G.nodes[n]["x"] for n in nodes], [G.nodes[n]["y"] for n in nodes])))
+    if isinstance(hz, FloodHazard):
+        from engine.flood import elevated_nodes
+        nz.update({n: False for n in elevated_nodes(net)})
     zone_edges = {d["edge_id"] for u, v, d in G.edges(data=True) if nz[u] or nz[v]}
 
     garage, shelter = _depots(net, hz, eg)
@@ -254,7 +268,7 @@ def _buses(net: Network, hz: Hazard, eg: EvacGraph, sim, pop: pd.DataFrame, deci
     return plan, need_total, nh_shelter, nh_evac, bus_shelter
 
 
-def _depots(net: Network, hz: Hazard, eg: EvacGraph) -> tuple[tuple[str, int], tuple[str, int]]:
+def _depots(net: Network, hz: Hazard | FloodHazard, eg: EvacGraph) -> tuple[tuple[str, int], tuple[str, int]]:
     d = net.depots
     far_exit = max(eg.exits, key=lambda i: float(hz.distance(*_xy(net, eg.node_ids[i])))) if eg.exits else None
     fallback = ("exit", eg.node_ids[far_exit]) if far_exit is not None else ("node", next(iter(net.G.nodes)))
@@ -272,7 +286,7 @@ def _depots(net: Network, hz: Hazard, eg: EvacGraph) -> tuple[tuple[str, int], t
         if not len(rows):
             return fallback
         x, y = rows["x"].to_numpy(float), rows["y"].to_numpy(float)
-        dist = hz.distance(x, y)
+        dist = hz.geo_distance(x, y)
         safe = ~hz.in_region(x, y)
         i = int(np.argmin(np.where(safe, dist, np.inf))) if safe.any() else int(np.argmax(dist))
         r = rows.iloc[i]

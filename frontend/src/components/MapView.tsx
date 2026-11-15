@@ -7,11 +7,13 @@ import { PathStyleExtension, type PathStyleExtensionProps } from '@deck.gl/exten
 import { Map } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '../lib/maplibreWorker'
-import type { FeatureCollection, Polygon } from 'geojson'
-import type { BlockFeature, BlockFrequency, BlockGeoCollection, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse } from '../types'
+import type { FeatureCollection, Polygon, Position } from 'geojson'
+import type { BlockFeature, BlockFrequency, BlockGeoCollection, Bus, EdgeFeature, RailCollection, ScenarioParams, ScenarioResponse, ZoneFeature } from '../types'
 import { COLORS, blockColor, frequencyColor, loadColor } from '../lib/colors'
 import { busPosition, loadAt, type BusStop, type Derived } from '../lib/derive'
-import { along, distM } from '../lib/geo'
+import { fmtDuration } from '../lib/format'
+import { along, centroid, distM } from '../lib/geo'
+import { floodStepAt, isFloodResult } from '../lib/hazard'
 import { Tooltip, type HoverInfo } from './Tooltip'
 import type { Selection } from './InfoCard'
 
@@ -57,12 +59,66 @@ interface Props {
 type Zones = ScenarioResponse['zones']
 const WORLD: [number, number][] = [[-180, -85], [180, -85], [180, 85], [-180, 85]]
 
-function zonesBBox(z: Zones): [[number, number], [number, number]] | null {
+/** Outer and inner rings of a Polygon or MultiPolygon. */
+function rings(f: ZoneFeature): Position[][] {
+  return f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates.flat()
+}
+
+function ringsBBox(rs: Position[][]): [[number, number], [number, number]] | null {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  for (const f of z.features) for (const ring of f.geometry.coordinates) for (const [x, y] of ring) {
+  for (const ring of rs) for (const [x, y] of ring) {
     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y)
   }
   return isFinite(x0) ? [[x0, y0], [x1, y1]] : null
+}
+
+// Fit to the danger area only: a flood's rising lake (Mendota is ~10 km across) would zoom the map far out.
+const FIT_KINDS = new Set(['isolation', 'protect', 'flood'])
+function zonesBBox(z: Zones): [[number, number], [number, number]] | null {
+  return ringsBBox(z.features.filter((f) => FIT_KINDS.has(f.properties.kind)).flatMap(rings))
+}
+
+/** Zones split by role, cached per response so layers keep stable data (the map re-renders every frame). */
+interface SplitZones {
+  chem: Zones // isolation + protect (chemical)
+  source: ZoneFeature[] // rising lake(s)
+  peak: ZoneFeature[] // all land flooded at the peak
+  steps: ZoneFeature[] // flooded land over time, ascending t_s
+  labels: { position: [number, number]; text: string }[]
+}
+const splitCache = new WeakMap<Zones, SplitZones>()
+function splitZones(z: Zones): SplitZones {
+  const hit = splitCache.get(z)
+  if (hit) return hit
+  const of = (k: string) => z.features.filter((f) => f.properties.kind === k)
+  const source = of('flood_source')
+  const out: SplitZones = {
+    chem: { ...z, features: z.features.filter((f) => f.properties.kind === 'isolation' || f.properties.kind === 'protect') },
+    source,
+    peak: of('flood'),
+    steps: of('flood_step').sort((a, b) => (a.properties.t_s ?? 0) - (b.properties.t_s ?? 0)),
+    labels: lakeLabels(source),
+  }
+  splitCache.set(z, out)
+  return out
+}
+
+/** "Lake Mendota rising" / "Lake Monona rising": one label per lake, on its largest part. Mendota lies north of the isthmus. */
+function lakeLabels(source: ZoneFeature[]) {
+  const best = new globalThis.Map<string, { position: [number, number]; size: number }>()
+  for (const f of source) {
+    const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates
+    for (const poly of parts) {
+      const bb = ringsBBox([poly[0]])
+      if (!bb) continue
+      const size = distM(bb[0], bb[1])
+      if (size < 1500) continue // skip river slivers and small bays
+      const position = centroid(poly[0])
+      const name = position[1] > 43.085 ? 'Lake Mendota' : 'Lake Monona'
+      if ((best.get(name)?.size ?? 0) < size) best.set(name, { position, size })
+    }
+  }
+  return [...best].map(([name, b]) => ({ position: b.position, text: `${name} rising` }))
 }
 
 function fitView(z: Zones | null) {
@@ -86,7 +142,7 @@ function fitView(z: Zones | null) {
 function dimOutside(z: Zones | null): FeatureCollection<Polygon> | null {
   const protect = z?.features.find((f) => f.properties.kind === 'protect')
   if (!protect) return null
-  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, protect.geometry.coordinates[0]] } }] }
+  return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, rings(protect)[0]] } }] }
 }
 
 interface Particle {
@@ -121,6 +177,14 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
   if (zonesNow !== zoneHist.cur) setZoneHist({ cur: zonesNow, prev: zoneHist.cur, at: phase })
   const zoneFade = Math.min(1, Math.max(0, (phase - zoneHist.at) / 0.8))
   const dim = useMemo(() => dimOutside(zonesNow), [zonesNow])
+
+  // Flood: the water extent at the timeline time (last step with t_s <= t); the peak extent, faintly, in "Peak" view.
+  const floodResult = isFloodResult(result)
+  const floodControls = params.hazard === 'flood'
+  const split = useMemo(() => (zonesNow ? splitZones(zonesNow) : null), [zonesNow])
+  const stepNow = split && time != null ? floodStepAt(split.steps, time) : null
+  const waterNow = useMemo(() => (stepNow ? [stepNow] : []), [stepNow])
+  const waterData = time == null ? split?.peak ?? [] : waterNow
 
   // The three most-loaded bottleneck roads get a name label.
   const bottleneckLabels = useMemo(() => {
@@ -193,7 +257,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
   const zoneLayer = (id: string, zones: Zones, opacity: number) =>
     new GeoJsonLayer({
       id,
-      data: zones,
+      data: splitZones(zones).chem,
       opacity,
       filled: true,
       stroked: true,
@@ -215,6 +279,19 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         getPolygon: (f) => f.geometry.coordinates,
         getFillColor: [3, 5, 9, 120],
         opacity: zoneFade,
+      }),
+    split &&
+      split.source.length > 0 &&
+      new GeoJsonLayer({
+        id: 'flood-source',
+        data: split.source,
+        opacity: zoneFade,
+        filled: true,
+        stroked: true,
+        getFillColor: [...COLORS.lake, 46],
+        getLineColor: [...COLORS.lake, 235],
+        getLineWidth: 2,
+        lineWidthUnits: 'pixels',
       }),
     toggles.heatmap &&
       derived &&
@@ -275,6 +352,49 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         getLineColor: [10, 12, 16, 120],
         lineWidthMinPixels: 0.5,
         pickable: true,
+      }),
+    split &&
+      waterData.length > 0 &&
+      new GeoJsonLayer({
+        id: 'flood-water',
+        data: waterData,
+        opacity: zoneFade,
+        filled: true,
+        stroked: true,
+        // Peak view: faint, so the whole danger area shows without hiding the blocks. Timeline: the water now, a bit stronger.
+        getFillColor: [...COLORS.water, time == null ? 42 : 78],
+        getLineColor: [...COLORS.waterEdge, time == null ? 120 : 190],
+        getLineWidth: 1,
+        lineWidthUnits: 'pixels',
+        updateTriggers: { getFillColor: [time == null], getLineColor: [time == null] },
+        transitions: { getFillColor: 300 },
+      }),
+    // Water sits over the block fills; redraw the block outlines on top so the blocks still read.
+    floodResult &&
+      toggles.blocks &&
+      derived &&
+      new GeoJsonLayer<BlockFeature['properties']>({
+        id: 'blocks-outline',
+        data: derived.blockFeatures,
+        filled: false,
+        stroked: true,
+        getLineColor: (f) => (f.properties.decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
+        lineWidthMinPixels: 0.6,
+      }),
+    split &&
+      split.peak.length > 0 &&
+      new GeoJsonLayer<unknown, PathStyleExtensionProps<unknown>>({
+        id: 'flood-peak',
+        data: split.peak,
+        opacity: zoneFade,
+        filled: false,
+        stroked: true,
+        getLineColor: [...COLORS.waterEdge, 200],
+        getLineWidth: 1.5,
+        lineWidthUnits: 'pixels',
+        getDashArray: [6, 4],
+        dashJustified: true,
+        extensions: [new PathStyleExtension({ dash: true })],
       }),
     zoneHist.prev && zoneFade < 1 && zoneLayer('zones-prev', zoneHist.prev, 1 - zoneFade),
     result && zoneLayer('zones', result.zones, zoneFade),
@@ -343,6 +463,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         updateTriggers: { getColor: [hover?.layer] },
       }),
     rail &&
+      !floodControls &&
       new PathLayer({
         id: 'rail-hit',
         data: rail.features,
@@ -392,7 +513,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         id: 'stop-labels',
         data: hoveredBus == null ? [] : derived.stops.filter((s) => s.position != null && s.kind === 'pickup' && s.deadline_s != null && s.bus_id === hoveredBus),
         getPosition: (s) => s.position!,
-        getText: (s) => `${s.late ? 'LATE, ' : ''}by ${Math.round((s.deadline_s ?? 0) / 60)} min`,
+        getText: (s) => `${s.late ? 'LATE, ' : ''}by ${floodResult ? fmtDuration(s.deadline_s ?? 0) : `${Math.round((s.deadline_s ?? 0) / 60)} min`}`,
         getSize: 11,
         getColor: (s) => (s.late ? [255, 150, 150, 255] : [220, 230, 245, 255]),
         getPixelOffset: [0, -14],
@@ -414,7 +535,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         stroked: true,
         lineWidthMinPixels: 2,
       }),
-    new ScatterplotLayer({
+    !floodControls && new ScatterplotLayer({
       id: 'release-pulse',
       data: [releasePos],
       getPosition: (d) => d,
@@ -423,7 +544,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       radiusUnits: 'pixels',
       updateTriggers: { getFillColor: [pulse], getRadius: [pulse] },
     }),
-    new ScatterplotLayer({
+    !floodControls && new ScatterplotLayer({
       id: 'release',
       data: [releasePos],
       getPosition: (d) => d,
@@ -456,6 +577,25 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         getBorderWidth: 1,
         backgroundPadding: [6, 3, 6, 3],
         pickable: false,
+      }),
+    split &&
+      split.labels.length > 0 &&
+      new TextLayer({
+        id: 'lake-labels',
+        data: split.labels,
+        getPosition: (d) => d.position,
+        getText: (d) => d.text,
+        getSize: 12.5,
+        getColor: [247, 248, 248, 255],
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontWeight: 600,
+        characterSet: 'auto',
+        background: true,
+        getBackgroundColor: [15, 16, 17, 225],
+        getBorderColor: [...COLORS.lake, 220],
+        getBorderWidth: 1,
+        backgroundPadding: [6, 3, 6, 3],
+        opacity: zoneFade,
       }),
   ].filter(Boolean)
 
@@ -503,6 +643,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       }
     }
     onSelect(null)
+    if (floodControls) return // a flood has no derailment pin to move
     if (railOnly && top?.layer?.id !== 'rail-hit') return
     const viewport = deck.getViewports()[0]
     if (!viewport) return

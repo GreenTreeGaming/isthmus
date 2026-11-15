@@ -4,7 +4,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
 import { getInsights, getRobustness } from '../api'
-import type { Insights, Robustness } from '../types'
+import type { FloodInsights, Insights, Robustness } from '../types'
 import { compass, fmtCompact, fmtDuration, fmtInt, fmtPct } from '../lib/format'
 
 // Monochrome charts: neutral bars, and colour only on the worst case (amber = slowest / most frequent, red = most exposed).
@@ -328,8 +328,118 @@ export function PlanningTab({ onShowFrequency, frequencyReady }: { onShowFrequen
         </div>
       )}
 
+      {data.flood && <FloodSection f={data.flood} />}
+
       {robust && <RobustnessSection r={robust} />}
     </div>
+  )
+}
+
+const fmtRiseM = (m: number) => `+${Number(m.toFixed(2))} m`
+
+/** Lowest flood rise = most exposed: that bar gets the highlight colour. */
+function highlightMin<T>(data: T[], key: (d: T) => number, color: string) {
+  const min = Math.min(...data.map(key))
+  return data.map((d, i) => <Cell key={i} fill={key(d) === min ? color : SERIES} />)
+}
+
+function FloodSection({ f }: { f: FloodInsights }) {
+  const facilities = [...f.facilities].sort((a, b) => a.flood_rise_m - b.flood_rise_m).slice(0, 10)
+  const roads = [...f.roads].sort((a, b) => a.flood_rise_m - b.flood_rise_m).slice(0, 10)
+  const byRise = [...f.by_rise].sort((a, b) => a.rise_m - b.rise_m).map((r) => ({ ...r, label: fmtRiseM(r.rise_m) }))
+  const maxRise = Math.max(0.5, ...facilities.map((x) => x.flood_rise_m), ...roads.map((x) => x.flood_rise_m))
+  const barH = (n: number) => Math.max(160, n * 38 + 30)
+  const riseChart = (rows: { name: string; flood_rise_m: number; type?: string }[], color: string) => (
+    <ResponsiveContainer width="100%" height={barH(rows.length)}>
+      <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 56, top: 4, bottom: 4 }} barCategoryGap={8}>
+        <XAxis type="number" domain={[0, Math.ceil(maxRise * 2) / 2]} tickFormatter={(v: number) => `${v} m`} tick={AXIS} axisLine={false} tickLine={false} />
+        <YAxis type="category" dataKey="name" width={200} tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
+        <Tooltip {...TT} formatter={(v: number, _n, p) => [fmtRiseM(v), p.payload.type ? (FACILITY_LABEL[p.payload.type] ?? p.payload.type.replace(/_/g, ' ')) : 'Floods at']} />
+        <Bar dataKey="flood_rise_m" radius={[0, 3, 3, 0]} maxBarSize={18}>
+          {highlightMin(rows, (d) => d.flood_rise_m, color)}
+          <LabelList dataKey="flood_rise_m" position="right" formatter={(v: number) => fmtRiseM(v)} fill={LABEL} fontSize={12} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  )
+  return (
+    <section className="robust">
+      <h2 className="section-title">Floods: what goes underwater first</h2>
+      <p className="robust-lede">
+        {fmtInt(f.n_scenarios)} flood scenarios: Lake Mendota, Lake Monona with the Yahara River, or both, rising by different
+        heights. For each place, the bars show how far the lakes must rise before water reaches it. Lower means it floods sooner.
+      </p>
+      {f.garage_flood_rise_m != null && (
+        <div className="findings">
+          <article className="finding tone-bad">
+            <div className="finding-big">{fmtRiseM(f.garage_flood_rise_m)}</div>
+            <div>
+              <h3>Metro&apos;s <b>bus garage</b> floods when the lakes rise {Number(f.garage_flood_rise_m.toFixed(2))} m</h3>
+              <p>Every evacuation bus starts there. Above that level the buses must be moved out before the water arrives, or the pickups for residents who need a ride never start.</p>
+            </div>
+          </article>
+        </div>
+      )}
+      <div className="chart-grid">
+        {facilities.length > 0 && (
+          <ChartCard title="Facilities, by how high the lakes must rise to reach them" sub="Lake rise above the normal summer level at which water reaches the site">
+            {riseChart(facilities, RED)}
+          </ChartCard>
+        )}
+        {roads.length > 0 && (
+          <ChartCard title="Roads, by how high the lakes must rise to cut them" sub="Lake rise at which the road first goes underwater and closes">
+            {riseChart(roads, AMBER)}
+          </ChartCard>
+        )}
+      </div>
+      {byRise.length > 0 && (
+        <div className="chart-grid">
+          <ChartCard title="Who moves, by lake rise" sub="Average people per scenario: evacuating to higher ground vs. staying and moving to an upper floor">
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={byRise} margin={{ left: 0, right: 12, top: 22, bottom: 4 }} barCategoryGap="24%">
+                <XAxis dataKey="label" tick={{ ...AXIS, fill: LABEL }} axisLine={false} tickLine={false} />
+                <YAxis tick={AXIS} axisLine={false} tickLine={false} width={48} tickFormatter={(v: number) => fmtCompact(v)} />
+                <Tooltip {...TT} formatter={(v: number, n: string) => [fmtInt(v), n === 'mean_people_evacuating' ? 'Evacuating' : 'Staying (upper floor)']} />
+                <Bar dataKey="mean_people_evacuating" fill="#ff6b1a" radius={[4, 4, 0, 0]} maxBarSize={44} />
+                <Bar dataKey="mean_people_sheltering" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={44} />
+              </BarChart>
+            </ResponsiveContainer>
+            <div className="mini-legend"><span><i style={{ background: '#ff6b1a' }} />Evacuating</span><span><i style={{ background: '#8b5cf6' }} />Staying, upper floor</span></div>
+          </ChartCard>
+          <ChartCard title="Flooded area and response, by lake rise" sub="Averages per scenario">
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Lake rise</th>
+                    <th>Flooded</th>
+                    <th>Evacuating</th>
+                    <th>Staying</th>
+                    <th>Everyone out</th>
+                    <th>Need a bus</th>
+                    <th>Left behind</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byRise.map((r) => (
+                    <tr key={r.rise_m}>
+                      <th>{r.label}</th>
+                      <td>{r.flooded_km2.toFixed(1)} km²</td>
+                      <td>{fmtInt(r.mean_people_evacuating)}</td>
+                      <td>{fmtInt(r.mean_people_sheltering)}</td>
+                      <td>{r.mean_people_evacuating > 0 ? fmtDuration(r.mean_clearance_s) : '—'}</td>
+                      <td>{fmtInt(r.mean_need_bus)}</td>
+                      <td>{fmtInt(r.mean_unserved)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="muted small">"Left behind" = residents who need a ride that no bus can reach before the water arrives.</p>
+          </ChartCard>
+        </div>
+      )}
+    </section>
   )
 }
 

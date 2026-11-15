@@ -12,12 +12,14 @@ interface Props {
   buses: Bus[]
   derived: Derived | null
   timing: WaveTiming
+  /** Flood result: water instead of gas. */
+  flood: boolean
   onClose: () => void
   onHoverBus: (id: number | null) => void
 }
 
-function BlockCard({ p, timing }: { p: BlockProps; timing: WaveTiming }) {
-  const e = explainBlock(p, timing)
+function BlockCard({ p, timing, flood }: { p: BlockProps; timing: WaveTiming; flood: boolean }) {
+  const e = explainBlock(p, timing, flood)
   return (
     <>
       <div className={`why-head ${e.tone}`}>
@@ -51,7 +53,8 @@ function stopLabel(s: BusStop, pickupNo: number) {
   return `Pickup ${pickupNo}`
 }
 
-function BusCard({ bus, stops }: { bus: Bus; stops: BusStop[] }) {
+function BusCard({ bus, stops, flood }: { bus: Bus; stops: BusStop[]; flood: boolean }) {
+  const Hz = flood ? 'Water' : 'Gas'
   const late = stops.filter((s) => s.late).length
   const pickupNo = stops.map((_, i) => stops.slice(0, i + 1).filter((x) => x.kind === 'pickup').length)
   return (
@@ -62,13 +65,13 @@ function BusCard({ bus, stops }: { bus: Bus; stops: BusStop[] }) {
           <div className="why-title">Bus {bus.bus_id + 1}</div>
           <div className="why-sentence">
             {stops.filter((s) => s.kind === 'pickup').length} pickups ·{' '}
-            {late > 0 ? <span className="bad">{late} after the deadline</span> : <span className="good">each before its gas deadline</span>}
+            {late > 0 ? <span className="bad">{late} after the deadline</span> : <span className="good">each before its {Hz.toLowerCase()} deadline</span>}
           </div>
         </div>
       </div>
       <table className="stop-table">
         <thead>
-          <tr><th>Stop</th><th>Bus at</th><th>Gas at</th><th>Aboard</th></tr>
+          <tr><th>Stop</th><th>Bus at</th><th>{Hz} at</th><th>Aboard</th></tr>
         </thead>
         <tbody>
           {stops.map((s, i) => {
@@ -84,21 +87,21 @@ function BusCard({ bus, stops }: { bus: Bus; stops: BusStop[] }) {
         </tbody>
       </table>
       <div className="why-foot">
-        "Gas at" = the deadline the bus router enforced for that stop. Residents no bus could reach in time are counted as "left behind" on
+        "{Hz} at" = the deadline the bus router enforced for that stop. Residents no bus could reach in time are counted as "left behind" on
         the Need a bus card. Times from the alert.
       </div>
     </>
   )
 }
 
-export function InfoCard({ selection, blocks, buses, derived, timing, onClose, onHoverBus }: Props) {
+export function InfoCard({ selection, blocks, buses, derived, timing, flood, onClose, onHoverBus }: Props) {
   let body: React.ReactNode = null
   if (selection.kind === 'block') {
     const run = blocks[selection.id]
-    if (run) body = <BlockCard p={{ ...run, block_id: selection.id }} timing={timing} />
+    if (run) body = <BlockCard p={{ ...run, block_id: selection.id }} timing={timing} flood={flood} />
   } else {
     const bus = buses.find((b) => b.bus_id === selection.id)
-    if (bus) body = <BusCard bus={bus} stops={(derived?.stops ?? []).filter((s) => s.bus_id === bus.bus_id)} />
+    if (bus) body = <BusCard bus={bus} stops={(derived?.stops ?? []).filter((s) => s.bus_id === bus.bus_id)} flood={flood} />
   }
   if (!body) return null
   return (

@@ -145,7 +145,39 @@ def write_synthetic(out_dir: str | Path, seed: int = 7) -> Path:
             gdf.to_parquet(out / f"{name}.parquet", index=False)
         else:
             df.to_parquet(out / f"{name}.parquet", index=False)
+    write_flood_grid(out)
     return out
+
+
+def write_flood_grid(out_dir: str | Path) -> Path:
+    """Synthetic flood_grid.npz (same keys as data/flood_dem.py): a 'Monona' south of the grid and a 'Mendota'
+    north of it, 2 m higher; the ground rises from both shores to a 5 m crest across the middle, with a 1 m dip
+    (a low channel) along the arterial column, so water reaches the middle first along the low channel."""
+    from engine.flood import priority_flood
+    from engine.network import to_metric
+
+    cell = 25.0
+    (xa, ya), (xb, yb) = to_metric(LON0, LAT0), to_metric(LON0 + (NX - 1) * DLON, LAT0 + (NY - 1) * DLAT)
+    x0, y_top = xa - 600.0, yb + 600.0
+    H, W = int((y_top - (ya - 600.0)) / cell), int((xb + 600.0 - x0) / cell)
+    yy = y_top - (np.arange(H) + 0.5) * cell
+    xx = x0 + (np.arange(W) + 0.5) * cell
+    Y, X = np.meshgrid(yy, xx, indexing="ij")
+    mid = (ya + yb) / 2
+    elev = np.where(Y < mid, (Y - (ya - 400.0)) / (mid - ya + 400.0) * 5.0, 2.0 + (yb + 400.0 - Y) / (yb + 400.0 - mid) * 3.0)
+    col_x = to_metric(LON0 + ARTERIAL_COL * DLON, LAT0)[0]
+    elev = elev - np.where(np.abs(X - col_x) < 60.0, 1.0, 0.0)
+    lake = np.zeros((H, W), np.int8)
+    lake[Y < ya - 400.0] = 2                     # "Monona", level 0 m
+    lake[Y > yb + 400.0] = 1                     # "Mendota", level 2 m
+    elev = np.where(lake == 2, 0.0, np.where(lake == 1, 2.0, elev))
+    out = {"x0": x0, "y_top": y_top, "cell": cell, "lake_code": lake, "level_mendota": 2.0, "level_monona": 0.0}
+    for k, code, level in (("mendota", 1, 2.0), ("monona", 2, 0.0)):
+        other = (lake != 0) & (lake != code)
+        out[f"rise_{k}"] = (priority_flood(elev, lake == code, other) - level).astype(np.float32)
+    path = Path(out_dir) / "flood_grid.npz"
+    np.savez_compressed(path, **out)
+    return path
 
 
 def center_release() -> tuple[float, float]:

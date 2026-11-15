@@ -19,11 +19,23 @@ export interface DemoStep {
 /** Wisconsin State Capitol — the demo derailment is placed on the nearest rail line to it. */
 export const CAPITOL: [number, number] = [-89.3841, 43.0747]
 
+// Every step sets the hazard explicitly, so stepping between chemical and flood always resets it.
 const BASE: Partial<ScenarioParams> = {
+  hazard: 'chemical',
   chemical: 'chlorine',
   spill_size: 'large',
   wind_from_deg: 225,
   wind_speed_mps: 1.5,
+  time_of_day: 'day',
+  bus_count: 20,
+  contraflow: false,
+}
+
+const FLOOD: Partial<ScenarioParams> = {
+  hazard: 'flood',
+  flood_source: 'both',
+  flood_rise_m: 1.5,
+  flood_peak_h: 6,
   time_of_day: 'day',
   bus_count: 20,
   contraflow: false,
@@ -73,5 +85,16 @@ export const DEMO_STEPS: DemoStep[] = [
     params: { ...BASE, time_of_day: 'night', bus_count: 5 },
     compareTo: { ...BASE, time_of_day: 'night' },
     compareLabel: 'Night, 20 buses',
+  },
+  {
+    title: 'When the lakes rise',
+    caption:
+      'Heavy rain raises both lakes 1.5 m over 6 hours. Water spreads up the Yahara River across the east isthmus. Orange areas drive to higher ground; purple areas stay and move to upper floors.',
+    live: (s, b) =>
+      `Heavy rain raises both lakes 1.5 m over 6 hours. Water spreads up the Yahara River across the east isthmus: ${n(s.people_evacuating)} people evacuate and ${n(s.people_sheltering)} stay and move to upper floors${b ? ` (at +0.75 m: ${n(b.people_evacuating)} and ${n(b.people_sheltering)})` : ''}.`,
+    try: 'Press Play to watch the water rise, then click a block to see when it arrives.',
+    params: { ...FLOOD },
+    compareTo: { ...FLOOD, flood_rise_m: 0.75 },
+    compareLabel: 'Lakes +0.75 m',
   },
 ]

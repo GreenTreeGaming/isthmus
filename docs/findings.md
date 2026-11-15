@@ -99,3 +99,32 @@ LEHD LODES assigns every job of some large employers to one headquarters block �
 landed on a single campus block, and State of Wisconsin jobs on the Capitol. Left as-is, the model would put a
 stadium's worth of cars on one city block. We cap daytime density at 100,000 people/km² (above the 99th
 percentile of Madison blocks); 5 blocks were capped.
+
+## 9. Floods: when the lakes rise
+
+Source: the `flood` key of `data/gold/insights.json` (`python -m engine.flood_batch data/silver`): Lake Mendota,
+Lake Monona (+ the Yahara River below it) or both × rise 0.5 / 1 / 1.5 / 2 / 3 m × peak in 3 or 12 h × night /
+day / game day = **90 scenarios, 0 failures**, plus thresholds read straight from the flood grid.
+
+**At about +0.5 m, Lake Mendota spills across the east isthmus.** The low ground along the Yahara River fills
+all at once, and with it go East Washington Avenue, East Johnson Street, East Gorham Street, Packers Avenue,
+North First Street, Pennsylvania Avenue — **and Madison Metro's bus garage (+0.53 m)**. The same garage that sits
+in the chemical danger zone in 52% of scenarios is also one of the first places to flood.
+
+| Both lakes rise | Land flooded | Avg. people evacuating | Avg. people staying (upper floors) | Left without a bus |
+|---|---|---|---|---|
+| +0.5 m | 1.8 km² | 19 | 0 | 0 |
+| +1 m | 9.1 km² | 6,764 | 293 | 0 |
+| +1.5 m | 16.4 km² | 10,341 | 2,200 | 0 |
+| +2 m | 19.6 km² | 13,008 | 2,984 | 0 |
+| +3 m | 27.2 km² | 21,462 | 2,150 | 0 |
+
+- **Mendota is the dangerous lake.** At +1 m, Mendota floods 3.9 km² with ~6,500 people evacuating; Monona
+  floods more land (5.2 km²) but it's mostly wetland south of the lake, with ~220 people evacuating.
+- **Next roads to go:** John Nolen Drive and South Blair Street (+0.96 m), North Stoughton Road (+1.35 m), South
+  Park Street (+1.79 m). Candidate shelter Madison College Truax floods at +1.59 m.
+- **Time isn't the problem in a flood — the garage and the roads are.** Whether the peak comes in 3 or 12 hours,
+  about the same number of people evacuate (~10,300) and every bus pickup is made: water moves in hours, gas in
+  minutes. What breaks first is infrastructure: the buses' garage and the main east-side roads.
+
+The flood model is a "bathtub" upper bound: no sandbags, pumps, storm sewers or rainfall runoff (see methods).

@@ -8,7 +8,8 @@ Drop a chlorine or ammonia derailment on any rail line through Madison's isthmus
 draws the official danger zone, decides **block by block who evacuates and who shelters in place**, staggers
 departures so the few roads out don't gridlock, and routes buses to residents without a car, each pickup
 scheduled **before the gas reaches them**. Then it runs **576 scenarios on Databricks** to find what holds
-across every derailment, wind and time of day.
+across every derailment, wind and time of day. Flip the switch to **Flood** and the same engine plans for Lake
+Mendota and Lake Monona rising over the isthmus, using real elevation data.
 
 ![MadHacks](https://img.shields.io/badge/MadHacks-Let's_Dig_In-c5050c?style=flat-square)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](requirements.txt)
@@ -16,7 +17,7 @@ across every derailment, wind and time of day.
 [![Databricks](https://img.shields.io/badge/Databricks-Delta_·_AI%2FBI_·_Genie-FF3621?style=flat-square&logo=databricks&logoColor=white)](data/databricks/batch_scenarios.py)
 [![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/main.py)
 [![React + deck.gl](https://img.shields.io/badge/React_+_deck.gl-19_/_9-61DAFB?style=flat-square&logo=react&logoColor=black)](frontend/package.json)
-[![Tests](https://img.shields.io/badge/tests-84_passing-2ea44f?style=flat-square)](engine/tests)
+[![Tests](https://img.shields.io/badge/tests-98_passing-2ea44f?style=flat-square)](engine/tests)
 
 [Features](#features) · [How it works](#how-it-works) · [Results](#results) · [Built with](#built-with) · [Run it](#run-it) · [Limits](#known-limits) · [Full findings](docs/findings.md) · [Methods](docs/methods.md)
 
@@ -64,7 +65,9 @@ We dug into both, with real Madison data, and asked where plans break.
 | ▶️ **Guided demo** | Four steps that tell the story: who leaves, faster wind, game day, too few buses. |
 | 📊 **Planning tab** | The 576-scenario findings in the app: facility exposure, recurring choke points, wind direction and time of day. |
 | ⚙️ **Every assumption visible** | Every tunable number lives in one file ([`engine/assumptions.py`](engine/assumptions.py)) and is shown in the Assumptions tab. |
-| 🧱 **Contraflow and closures** | Turn major roads all-outbound, or close specific roads, and re-plan. |
+| 🌊 **Floods too** | Switch the hazard to **Flood**: Lake Mendota, Lake Monona or both rise by up to 3 m over hours. USGS elevation and a priority-flood algorithm decide where water can actually reach; flooded roads close and everything else re-plans. |
+| 🧱 **Contraflow** | Turn major roads all-outbound and re-plan. (Road closures are supported by the engine and API.) |
+| 🧭 **Explained in the app** | A first-visit welcome, a How it works tab and help tips on every control. |
 
 ## How it works
 
@@ -162,6 +165,27 @@ The notebook ([`data/databricks/batch_scenarios.py`](data/databricks/batch_scena
 code as the app on Serverless compute and writes `scenario_results` plus `gold_*` summary tables. The
 dashboard and Genie read those tables; the same numbers land in [`data/gold/`](data/gold/) for the app.
 
+### 4. A second hazard: when the lakes rise
+
+```mermaid
+flowchart LR
+    DEM["USGS 3DEP elevation<br/>~10 m → 20 m cells"] --> LAKES["Find each lake:<br/>its flattened water surface<br/>= normal level"]
+    LAKES --> PF["Priority-flood<br/>lowest lake level at which<br/>water connects to each cell"]
+    PF --> GRID[("flood_grid.npz<br/>rise needed per cell,<br/>per lake")]
+    GRID --> HZ["Scenario: lake(s) rise R m<br/>over P hours"]
+    HZ --> SAME["Zone = cells reached by R<br/>arrival = P × need ÷ R<br/>away = higher ground"]
+    SAME --> RUN(["Same steps 2–7:<br/>decisions · flow · waves<br/>sim · buses"])
+```
+
+[`data/flood_dem.py`](data/flood_dem.py) downloads USGS 3DEP elevation and finds Lake Mendota and Lake Monona by
+their flattened water surfaces (Mendota's normal level comes out at 258.96 m, its 849.6 ft summer level). A
+**priority-flood** ([`engine/flood.py`](engine/flood.py)) computes, for every 20 m cell, how far each lake must
+rise before water can actually *flow* there: it can't jump over higher ground, and the Tenney dam keeps Mendota
+and Monona separate. A flood scenario raises one or both lakes linearly to a peak; the danger zone, arrival times
+and "away from the hazard" (toward higher ground) come from that grid, flooded roads close, and steps 2–7 run
+unchanged. "Shelter" becomes *stay and move to an upper floor*. Highways count as raised, since bare-earth
+elevation data removes bridges and embankments.
+
 ## Results
 
 **Scenario set:** 8 derailment points on the rail lines within 2.5 km of the isthmus core × 8 wind directions ×
@@ -181,6 +205,8 @@ and matches the Databricks dashboard. Full write-up: [docs/findings.md](docs/fin
 | Game day vs. a normal day: people told to shelter | **~94,000** vs. ~56,000 |
 | Most frequent choke point (Latitude 43 St, south-side Beltline approach) | only **16%** of scenarios: **no fixed plan works** |
 | Night, light wind, derailment near the Capitol: 491 people need a bus | 20 buses: **0** left behind · 10: **0** · 5: **191** |
+| **Flood:** Lake Mendota rise that puts Metro's bus garage underwater | **+0.53 m**, along with E Washington Ave, E Johnson St and Packers Ave |
+| **Flood:** both lakes +1.5 m | **16 km²** flooded, ~10,300 people evacuate, ~2,200 stay on upper floors |
 
 ### Latency, one scenario
 
@@ -368,9 +394,41 @@ the fast path and the NetworkX fallback give the same costs.
 
 </details>
 
-**Validation:** 84 tests ([`engine/tests/`](engine/tests/), [`backend/tests/`](backend/tests/)) cover units
+<details>
+<summary><b>Floods: Mendota spills across the east isthmus at about +0.5 m</b></summary>
+<br/>
+
+[`engine/flood_batch.py`](engine/flood_batch.py): Mendota, Monona (+ Yahara River) or both × rise 0.5–3 m × peak
+in 3 or 12 h × night / day / game day = **90 scenarios, 0 failures**, plus thresholds read straight from the grid.
+
+| Both lakes rise | Land flooded | Avg. evacuating | Avg. staying (upper floors) | Left without a bus |
+|---|---|---|---|---|
+| +0.5 m | 1.8 km² | 19 | 0 | 0 |
+| +1 m | 9.1 km² | 6,764 | 293 | 0 |
+| +1.5 m | 16.4 km² | 10,341 | 2,200 | 0 |
+| +2 m | 19.6 km² | 13,008 | 2,984 | 0 |
+| +3 m | 27.2 km² | 21,462 | 2,150 | 0 |
+
+| How far the lakes rise before it floods | |
+|---|---|
+| **Madison Metro bus garage** · East Washington Ave · East Johnson St · East Gorham St · Packers Ave · North First St · Pennsylvania Ave | **+0.53 m** |
+| John Nolen Drive · South Blair Street | +0.96 m |
+| North Stoughton Road | +1.35 m |
+| Madison College Truax (candidate shelter) | +1.59 m |
+| South Park Street | +1.79 m |
+
+At about half a meter, Mendota finds a low path into the Yahara River corridor and the whole east-isthmus basin
+fills at once. **Mendota is the dangerous lake:** at +1 m it puts ~6,500 people in the evacuation zone; Monona
+floods more land, but mostly wetland, with ~220 people. And **time isn't the problem in a flood**: a 3-hour or a
+12-hour peak gives the same ~10,300 evacuees and every bus pickup is made. What breaks first is infrastructure,
+the bus garage and the east-side arterials. Same garage, two hazards.
+
+</details>
+
+**Validation:** 98 tests ([`engine/tests/`](engine/tests/), [`backend/tests/`](backend/tests/)) cover units
 (rate × time vs. count), road rules, waves never exceeding capacity, bus deadlines never violated, fast vs.
-fallback routing agreement, ERG wind bands, shelters outside the danger area, and the API contract.
+fallback routing agreement, ERG wind bands, shelters outside the danger area, the API contract, and floods
+(priority-flood over a ridge, zone and arrival rules, bigger rise floods a superset, buses beat the water).
 
 ## Built with
 
@@ -383,10 +441,12 @@ Genie → Planning tab**.
 | **Data** | **OSMnx**, **GeoPandas**, **pyproj** | Road network, rail, bus stops and hospitals from OpenStreetMap; all geometry in UTM 16N for meters ([`build_silver_osm.py`](data/build_silver_osm.py)) |
 | | **Census, ACS, LODES, CMS APIs** | Night and day population, no-car households, 65+, disability, nursing-home residents |
 | | **US Census geocoder** | Coordinates for the Metro garage and candidate shelters |
+| | **USGS 3DEP** elevation | Lake levels and ground height for floods ([`flood_dem.py`](data/flood_dem.py)) |
 | **Engine** | **Shapely 2** | ERG isolation circle and protective-action square; which blocks and roads are inside ([`hazard.py`](engine/hazard.py)) |
 | | **OR-Tools** graph solvers | `SimpleMaxFlow` for clearance time and the min cut, `SimpleMinCostFlow` for routes ([`flow.py`](engine/flow.py)) |
 | | **OR-Tools** routing | Capacitated vehicle routing with time windows for buses ([`buses.py`](engine/buses.py)) |
 | | **SciPy** sparse graphs, **NetworkX**, **NumPy** | Fast shortest paths, graph building, vectorized simulation ([`sim.py`](engine/sim.py)) |
+| | **Priority-flood** (heap-based) | How far each lake must rise before water reaches every cell ([`flood.py`](engine/flood.py)) |
 | **Batch** | **Databricks** Serverless, **Delta Lake** | 576 scenarios from a Git-folder notebook into `workspace.isthmus.*` tables |
 | | **Databricks AI/BI** + **Genie** | Dashboard of the findings; ask questions in plain English |
 | **Backend** | **FastAPI**, **Uvicorn** | `/simulate`, `/insights` and friends; real, mock and placeholder engine modes ([`backend/`](backend/)) |
@@ -428,10 +488,11 @@ example response in [`contracts/`](contracts/)), for working on the frontend wit
 ### 3. Command line
 
 ```sh
-python -m pytest engine/tests backend/tests -q                   # 84 tests
+python -m pytest engine/tests backend/tests -q                   # 98 tests
 python -m engine.run_demo data/silver                            # a few scenarios with stage timings
 python -m engine.batch data/silver --n-points 8 --out data/gold  # the 576-scenario batch → data/gold/
 python -m engine.robustness data/silver                          # 7 assumption variants → robustness.json
+python -m engine.flood_batch data/silver --out data/gold         # 90 flood scenarios → insights.json "flood"
 cd frontend && npm run build && npm run lint                     # type-check, build and lint the app
 ```
 
@@ -440,6 +501,7 @@ cd frontend && npm run build && npm run lint                     # type-check, b
 ```sh
 echo "CENSUS_API_KEY=your_key" > .env        # free key: api.census.gov/data/key_signup.html
 python data/build_silver_osm.py data/silver  # downloads OSM, Census, ACS, LODES, CMS; cached in cache/
+python data/flood_dem.py data/silver         # USGS elevation → flood_grid.npz (no key needed)
 python data/validate_silver.py data/silver   # schema and sanity checks
 ```
 
@@ -450,14 +512,16 @@ python data/validate_silver.py data/silver   # schema and sanity checks
    compute (not a SQL warehouse) and click **Run all**. 576 scenarios take a few minutes.
 3. It writes `workspace.isthmus.scenario_results` plus `gold_*` tables (bottlenecks, binding limits, facilities,
    wind direction, wind speed, time of day). Build an **AI/BI dashboard** on them and add a **Genie** space, then
-   ask *"Which wind direction gives the longest clearance time?"*
+   ask *"Which wind direction gives the longest clearance time?"* The last cell runs the 90 flood scenarios
+   into `flood_results` and `gold_flood_*` tables.
 
 ### API
 
 | Method | Endpoint | Returns |
 |---|---|---|
 | `POST` | `/simulate` | One scenario's plan: zone, block decisions with reasons, road loads, bus routes with deadlines, summary, simulation timeline |
-| `GET` | `/insights` | The 576-scenario findings (Planning tab) |
+| `GET` | `/insights` | The 576-scenario findings, plus `flood` (Planning tab) |
+| `GET` | `/robustness` | The 7 assumption variants |
 | `GET` | `/block-frequency` | How often each block is in the danger zone |
 | `GET` | `/rail` | Rail lines, for placing a derailment |
 | `GET` | `/blocks` | Census block shapes |
@@ -481,6 +545,8 @@ Request and response shapes: [`contracts/engine_api.py`](contracts/engine_api.py
 
 ## Known limits
 
+- **Floods are a "bathtub" model.** Water reaches every connected cell below the lake level: no rainfall
+  runoff, storm sewers, pumps, sandbags or flow speed. An upper bound on where water can go.
 - **Not a plume model.** Zones follow ERG guidance. Terrain, buildings, lake breezes and plume meandering are
   ignored, and gas arrival is distance ÷ wind speed.
 - **Simplified traffic.** Point queues without spillback; no signals, turns or crashes. Good for ranking roads
@@ -497,13 +563,13 @@ Request and response shapes: [`contracts/engine_api.py`](contracts/engine_api.py
 
 ```
 contracts/       Shared interfaces: silver data schema, engine API types, example API response
-data/            build_silver_osm.py (data pipeline), validate_silver.py, silver/ and gold/ tables
+data/            build_silver_osm.py, flood_dem.py (data pipeline), validate_silver.py, silver/ and gold/
 data/databricks/ Batch notebook: 576 scenarios → Delta tables → dashboard + Genie
-engine/          hazard, evacgraph, population, decisions, flow, waves, sim, buses, scenario
-engine/          batch.py (scenario grid + gold tables), robustness.py, run_demo.py, assumptions.py
+engine/          hazard, flood, evacgraph, population, decisions, flow, waves, sim, buses, scenario
+engine/          batch.py, flood_batch.py, robustness.py, run_demo.py, assumptions.py
 engine/tests/    Engine tests (units, road rules, waves, deadlines, routing agreement, ERG bands)
 backend/         FastAPI service, result conversion, mock engine, API tests
-frontend/        React + deck.gl app: map, controls, demo, compare, Planning and Assumptions tabs
+frontend/        React + deck.gl app: map, controls, demo, compare, How it works, Planning, Assumptions
 docs/            Findings, methods and limitations, Devpost draft, demo script
 ```
 
@@ -512,7 +578,7 @@ Deeper reading: [Findings](docs/findings.md) · [Methods, assumptions and limita
 
 ## What's next
 
-Real plume modeling instead of ERG zones, the city's official shelter list, assisted-living facilities, live
+Rainfall and storm-sewer flooding on top of lake levels, real plume modeling instead of ERG zones, the city's official shelter list, assisted-living facilities, live
 wind from the National Weather Service, buses making several trips, and a spillback-aware traffic model.
 
 ## Team
@@ -529,7 +595,7 @@ wind from the National Weather Service, buses making several trips, and a spillb
 
 Hazard distances from the U.S. DOT **Emergency Response Guidebook 2024** (via NOAA CAMEO Chemicals). Map data ©
 **OpenStreetMap** contributors (ODbL). Population and household data from the **U.S. Census Bureau** (2020
-Census, ACS 2022 5-year, LEHD LODES 2022). Nursing-home data from **CMS Provider Data**. Routing and flow solvers
+Census, ACS 2022 5-year, LEHD LODES 2022). Elevation from **USGS 3DEP**. Nursing-home data from **CMS Provider Data**. Routing and flow solvers
 from Google **OR-Tools**.
 
 <div align="center">

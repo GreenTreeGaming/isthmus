@@ -24,6 +24,9 @@ about a second:
 - **Bus pickups with deadlines** for residents without a car and nursing homes, each scheduled before the gas
   arrives at that stop.
 - **A live traffic simulation** showing where and when roads back up.
+- **Floods too.** Switch the hazard and Lake Mendota and/or Lake Monona rise over the isthmus. USGS elevation and
+  a priority-flood algorithm work out where the water can actually reach; flooded roads close and the same
+  engine re-plans who leaves, who moves upstairs, and the bus pickups.
 - A **guided demo**, plain-English "why?" explanations for every block and bus, and a before/after compare mode.
 
 Then we ran **576 scenarios** on Databricks to find what holds across every derailment:
@@ -37,14 +40,18 @@ Then we ran **576 scenarios** on Databricks to find what holds across every dera
 - With 5 buses instead of 20, a light-wind derailment near the Capitol leaves **257 of 557** residents who
   need a ride behind during the day (191 of 491 at night).
 
+And 90 flood scenarios: **at about +0.5 m, Lake Mendota spills across the east isthmus**. East Washington Ave,
+East Johnson St, Packers Ave, and Madison Metro's bus garage go under together. Same garage, two hazards.
+
 ## How we built it
 
 - **Data:** OpenStreetMap roads, rail and bus stops (OSMnx); 2020 Census blocks; ACS vehicle, disability and age
   data; LEHD LODES daytime population; CMS nursing homes; ERG 2024 hazard tables; US Census geocoder.
 - **Engine (Python):** hazard zone geometry (Shapely), max-flow + binary search for capacity-limited clearance
   time and min-cost flow for routes (OR-Tools graph solvers), capacity-aware departure waves, a link-queue
-  traffic simulation, and OR-Tools vehicle routing with time windows for buses. ~1 s per scenario on a
-  5,400-intersection network. 84 tests.
+  traffic simulation, OR-Tools vehicle routing with time windows for buses, and a priority-flood over USGS 3DEP
+  elevation for lake floods. ~1 s per scenario on a
+  5,400-intersection network. 98 tests.
 - **Databricks:** batch scenario runs in a notebook on Serverless compute → Delta tables → AI/BI dashboard and a
   Genie agent you can ask "which wind direction is worst?"
 - **App:** FastAPI backend, React + deck.gl + MapLibre front end.

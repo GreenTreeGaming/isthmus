@@ -1,5 +1,5 @@
 {
- "_comment": "Example response of POST /simulate. Frontend builds against this shape. Coordinates are [lon, lat]. Times in seconds. buses[].deadline_s: per-stop gas deadline the router enforced (null for garage/shelter). edges[].properties.road_class: OSM class, for label priority.",
+ "_comment": "Example response of POST /simulate. Frontend builds against this shape. Coordinates are [lon, lat]. Times in seconds. buses[].deadline_s: per-stop gas deadline the router enforced (null for garage/shelter). edges[].properties.road_class: OSM class, for label priority. params.hazard: 'chemical' | 'flood'. For a flood, zones has no 'isolation'/'protect'; instead kind 'flood' (all land flooded at the peak), 'flood_source' (the lake(s) that rise) and several 'flood_step' features with properties {t_s, rise_m} (cumulative flooded land at that time, for animation). blocks[].plume_arrival_s and buses[].deadline_s are then when the water arrives.",
  "params": {
   "release_lon": -89.3705,
   "release_lat": 43.079,
@@ -12,7 +12,11 @@
   "bus_count": 20,
   "bus_capacity": 60,
   "contraflow": false,
-  "closed_edge_ids": []
+  "closed_edge_ids": [],
+  "hazard": "chemical",
+  "flood_source": "both",
+  "flood_rise_m": 1.0,
+  "flood_peak_h": 6.0
  },
  "summary": {
   "clearance_time_s": 7380,

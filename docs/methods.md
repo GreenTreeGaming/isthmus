@@ -37,7 +37,15 @@ Assumptions tab.
    candidate shelter outside the danger area. Each pickup must happen before the gas arrives there; travel
    times are the simulated congested times; buses avoid the zone unless picking up. If no bus could possibly
    arrive in time, those residents shelter in place instead of being counted as "unserved".
-9. **Batch** (`engine/batch.py`, `data/databricks/batch_scenarios.py`). Hundreds of scenarios on Databricks →
+9. **Floods** (`engine/flood.py`, `data/flood_dem.py`). The second hazard. USGS 3DEP elevation (~10 m,
+   averaged to 20 m). Each lake is found as its flattened water surface; its normal level is that height
+   (Mendota 258.96 m ≈ 849.6 ft, Monona 257.00 m). A **priority-flood** (Barnes et al. 2014) gives, for every
+   cell, the lowest lake level at which water connects to it: water must flow there, it can't jump over higher
+   ground, and the other lake is a barrier (the Tenney dam holds Mendota ~2 m above Monona). A scenario raises
+   Mendota, Monona or both by *rise* meters, linearly over *peak* hours. Danger zone = land reached by the peak;
+   arrival time = peak × rise-needed ÷ rise; "away" = toward ground that needs more rise (higher ground);
+   flooded roads close. Steps 2–8 then run unchanged; "shelter" means stay and move to an upper floor.
+10. **Batch** (`engine/batch.py`, `data/databricks/batch_scenarios.py`). Hundreds of scenarios on Databricks →
    Delta tables → AI/BI dashboard + Genie agent.
 
 ## Data (all public)
@@ -51,6 +59,7 @@ Assumptions tab.
 | Disability | ACS 2022 5-year, tracts (B18101 — not published at block-group level) |
 | Nursing homes | CMS Provider Data (average residents per day) |
 | Hazard distances | DOT Emergency Response Guidebook 2024 (via NOAA CAMEO Chemicals) |
+| Elevation (floods) | USGS 3DEP 1/3 arc-second via the National Map elevation service |
 | Bus garage | Madison Metro Transit, 1101 E Washington Ave |
 | Coordinates for garage and shelters | US Census geocoder |
 
@@ -71,6 +80,8 @@ have real exits. Derailments are placed only on rail lines within 2.5 km of the 
 | Buses | 20 × 60 seats, leave the garage 10 min after the alert | slider |
 | Walking speed | 1.2 m/s, 0.8 m/s for 65+ | |
 | Daytime density cap | 100,000 people/km² | LODES puts HQ jobs on one block |
+| Flood: lake rise | linear from normal level to the peak | simple, transparent |
+| Flood: highways | motorway/trunk intersections never flood | bare-earth elevation removes bridges and raised roadbeds |
 
 ## Limitations (say these out loud)
 
@@ -82,6 +93,9 @@ have real exits. Derailments are placed only on rail lines within 2.5 km of the 
   the study-area edge as safe.
 - **Candidate shelters** (Alliant Energy Center, Madison College Truax, East and West High Schools) are large
   public buildings we chose — **not official city shelter designations**.
+- **Floods are a "bathtub" model of lake level.** No rainfall runoff, storm sewers, pumps, sandbags or river
+  flow speed; water reaches every connected cell below the lake level. It's an upper bound on where water can
+  go. Blocks are judged at their center point.
 - **Assisted-living facilities** aren't in the CMS nursing-home list, so vulnerable facilities are undercounted.
   Hospital occupancy is a placeholder (hospitals are not evacuated by bus in the model).
 - **Students** aren't workers in LODES, so campus daytime population is understated.
@@ -90,6 +104,6 @@ have real exits. Derailments are placed only on rail lines within 2.5 km of the 
 
 ## Validation
 
-- 84 unit/integration tests (`pytest engine/tests backend/tests`), including units checks (rate × time vs.
+- 98 unit/integration tests (`pytest engine/tests backend/tests`), including units checks (rate × time vs.
   count), road rules, waves vs. capacity, bus deadlines never violated, and fast/fallback routing agreement.
 - Robustness: findings re-checked under 7 assumption variants (`docs/findings.md` §7).

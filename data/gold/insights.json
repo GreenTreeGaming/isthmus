@@ -277,5 +277,238 @@
   }
  ],
  "median_runtime_ms": 1015.0,
- "garage_in_zone_share": 0.523
+ "garage_in_zone_share": 0.523,
+ "flood": {
+  "n_scenarios": 90,
+  "n_failed": 0,
+  "source_for_thresholds": "both",
+  "by_rise": [
+   {
+    "rise_m": 0.5,
+    "flooded_km2": 1.78,
+    "mean_people_evacuating": 19.27,
+    "mean_people_sheltering": 0.0,
+    "mean_clearance_s": 1020.0,
+    "mean_need_bus": 1.0,
+    "mean_unserved": 0.0
+   },
+   {
+    "rise_m": 1.0,
+    "flooded_km2": 9.08,
+    "mean_people_evacuating": 6764.46,
+    "mean_people_sheltering": 293.02,
+    "mean_clearance_s": 3550.0,
+    "mean_need_bus": 80.5,
+    "mean_unserved": 0.0
+   },
+   {
+    "rise_m": 1.5,
+    "flooded_km2": 16.45,
+    "mean_people_evacuating": 10341.45,
+    "mean_people_sheltering": 2200.33,
+    "mean_clearance_s": 2730.0,
+    "mean_need_bus": 155.33,
+    "mean_unserved": 0.0
+   },
+   {
+    "rise_m": 2.0,
+    "flooded_km2": 19.56,
+    "mean_people_evacuating": 13007.97,
+    "mean_people_sheltering": 2984.33,
+    "mean_clearance_s": 3040.0,
+    "mean_need_bus": 190.83,
+    "mean_unserved": 0.0
+   },
+   {
+    "rise_m": 3.0,
+    "flooded_km2": 27.21,
+    "mean_people_evacuating": 21461.78,
+    "mean_people_sheltering": 2149.69,
+    "mean_clearance_s": 3850.0,
+    "mean_need_bus": 389.33,
+    "mean_unserved": 0.0
+   }
+  ],
+  "by_source": [
+   {
+    "flood_source": "both",
+    "rise_m": 0.5,
+    "flooded_km2": 1.78,
+    "mean_people_evacuating": 19.27
+   },
+   {
+    "flood_source": "both",
+    "rise_m": 1.0,
+    "flooded_km2": 9.08,
+    "mean_people_evacuating": 6764.46
+   },
+   {
+    "flood_source": "both",
+    "rise_m": 1.5,
+    "flooded_km2": 16.45,
+    "mean_people_evacuating": 10341.45
+   },
+   {
+    "flood_source": "both",
+    "rise_m": 2.0,
+    "flooded_km2": 19.56,
+    "mean_people_evacuating": 13007.97
+   },
+   {
+    "flood_source": "both",
+    "rise_m": 3.0,
+    "flooded_km2": 27.21,
+    "mean_people_evacuating": 21461.78
+   },
+   {
+    "flood_source": "mendota",
+    "rise_m": 0.5,
+    "flooded_km2": 0.57,
+    "mean_people_evacuating": 19.27
+   },
+   {
+    "flood_source": "mendota",
+    "rise_m": 1.0,
+    "flooded_km2": 3.88,
+    "mean_people_evacuating": 6540.05
+   },
+   {
+    "flood_source": "mendota",
+    "rise_m": 1.5,
+    "flooded_km2": 10.0,
+    "mean_people_evacuating": 9757.37
+   },
+   {
+    "flood_source": "mendota",
+    "rise_m": 2.0,
+    "flooded_km2": 12.17,
+    "mean_people_evacuating": 11819.29
+   },
+   {
+    "flood_source": "mendota",
+    "rise_m": 3.0,
+    "flooded_km2": 16.29,
+    "mean_people_evacuating": 16131.42
+   },
+   {
+    "flood_source": "monona",
+    "rise_m": 0.5,
+    "flooded_km2": 1.21,
+    "mean_people_evacuating": 0.0
+   },
+   {
+    "flood_source": "monona",
+    "rise_m": 1.0,
+    "flooded_km2": 5.23,
+    "mean_people_evacuating": 224.41
+   },
+   {
+    "flood_source": "monona",
+    "rise_m": 1.5,
+    "flooded_km2": 6.61,
+    "mean_people_evacuating": 783.41
+   },
+   {
+    "flood_source": "monona",
+    "rise_m": 2.0,
+    "flooded_km2": 7.73,
+    "mean_people_evacuating": 1451.97
+   },
+   {
+    "flood_source": "monona",
+    "rise_m": 3.0,
+    "flooded_km2": 16.44,
+    "mean_people_evacuating": 12324.83
+   }
+  ],
+  "by_peak": [
+   {
+    "peak_h": 3.0,
+    "mean_people_evacuating": 10313.26,
+    "mean_people_sheltering": 1532.21,
+    "mean_unserved": 0.0
+   },
+   {
+    "peak_h": 12.0,
+    "mean_people_evacuating": 10324.71,
+    "mean_people_sheltering": 1518.74,
+    "mean_unserved": 0.0
+   }
+  ],
+  "facilities": [
+   {
+    "name": "Madison Metro garage (1101 E Washington Ave)",
+    "type": "bus_garage",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "Madison College Truax",
+    "type": "shelter",
+    "flood_rise_m": 1.59
+   }
+  ],
+  "roads": [
+   {
+    "name": "Packers Avenue",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "East Washington Avenue",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "East Gorham Street",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "East Johnson Street",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "North First Street",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "Pennsylvania Avenue",
+    "flood_rise_m": 0.53
+   },
+   {
+    "name": "John Nolen Drive",
+    "flood_rise_m": 0.96
+   },
+   {
+    "name": "South Blair Street",
+    "flood_rise_m": 0.96
+   },
+   {
+    "name": "North Stoughton Road",
+    "flood_rise_m": 1.35
+   },
+   {
+    "name": "North Shore Drive",
+    "flood_rise_m": 1.35
+   },
+   {
+    "name": "Aberg Avenue",
+    "flood_rise_m": 1.38
+   },
+   {
+    "name": "South Park Street",
+    "flood_rise_m": 1.79
+   },
+   {
+    "name": "Proudfit Street",
+    "flood_rise_m": 1.81
+   },
+   {
+    "name": "West Washington Avenue",
+    "flood_rise_m": 2.1
+   },
+   {
+    "name": "US Highway 51",
+    "flood_rise_m": 2.51
+   }
+  ],
+  "garage_flood_rise_m": 0.53
+ }
 }

@@ -5,6 +5,9 @@ export type Chemical = 'chlorine' | 'ammonia'
 export type SpillSize = 'small' | 'large'
 export type TimeOfDay = 'night' | 'day' | 'gameday'
 export type Decision = 'evacuate' | 'shelter' | 'outside'
+export type HazardType = 'chemical' | 'flood'
+/** Which lake rises: Mendota, Monona (plus the Yahara River below it), or both. */
+export type FloodSource = 'mendota' | 'monona' | 'both'
 
 export interface ScenarioParams {
   release_lon: number
@@ -19,6 +22,13 @@ export interface ScenarioParams {
   bus_capacity: number
   contraflow: boolean
   closed_edge_ids: number[]
+  /** "chemical" uses release point, chemical, spill and wind; "flood" uses the flood_* fields below. */
+  hazard: HazardType
+  flood_source: FloodSource
+  /** Lake rise above normal at the peak, meters (backend: 0 < x <= 5). */
+  flood_rise_m: number
+  /** Hours from the alert until the water peaks (backend: 0 < x <= 72). */
+  flood_peak_h: number
 }
 
 export interface Summary {
@@ -35,6 +45,7 @@ export interface Summary {
 export interface BlockProps {
   block_id: string
   decision: Decision
+  /** When the hazard arrives: gas, or (flood) the rising water. */
   plume_arrival_s: number | null
   est_exit_time_s: number | null
   wave: number | null
@@ -61,7 +72,7 @@ export interface Bus {
   arrival_s: number[]
   load: number[]
   path: [number, number][]
-  /** Per stop: the gas-arrival deadline the bus router enforced (null for garage/shelter). */
+  /** Per stop: the hazard-arrival deadline (gas or water) the bus router enforced (null for garage/shelter). */
   deadline_s?: (number | null)[]
   /** Backend extra (not yet in contracts/): one [lon, lat] per stop, null where unknown. */
   stop_coords?: ([number, number] | null)[]
@@ -77,10 +88,23 @@ export interface BlockFrequency {
 }
 export type EdgeFeature = Feature<LineString, EdgeProps>
 
+/**
+ * Chemical: 'isolation' + 'protect'. Flood: 'flood' (all land flooded at the peak), 'flood_source' (the rising lakes)
+ * and several 'flood_step' features with { t_s, rise_m } (cumulative flooded land at t_s after the alert).
+ */
+export type ZoneKind = 'isolation' | 'protect' | 'flood' | 'flood_source' | 'flood_step'
+export interface ZoneProps {
+  kind: ZoneKind
+  t_s?: number
+  rise_m?: number
+}
+export type ZoneFeature = Feature<Polygon | MultiPolygon, ZoneProps>
+
 export interface ScenarioResponse {
-  params: ScenarioParams
+  /** Older backends may not echo the hazard fields. */
+  params: Omit<ScenarioParams, 'hazard' | 'flood_source' | 'flood_rise_m' | 'flood_peak_h'> & Partial<ScenarioParams>
   summary: Summary
-  zones: FeatureCollection<Polygon, { kind: 'isolation' | 'protect' }>
+  zones: FeatureCollection<Polygon | MultiPolygon, ZoneProps>
   blocks: Record<string, Omit<BlockProps, 'block_id'>> // geometry comes from GET /blocks
   edges: FeatureCollection<LineString, EdgeProps>
   buses: Bus[]
@@ -107,6 +131,25 @@ export interface Insights {
   by_wind_speed?: { wind_speed_mps: number; mean_clearance_s: number; mean_evacuating: number; mean_sheltering: number }[]
   garage_in_zone_share?: number
   bottleneck_method?: string
+  /** Flood batch results; absent until the flood batch has run. */
+  flood?: FloodInsights
+}
+
+export interface FloodInsights {
+  n_scenarios: number
+  by_rise: {
+    rise_m: number
+    flooded_km2: number
+    mean_people_evacuating: number
+    mean_people_sheltering: number
+    mean_clearance_s: number
+    mean_need_bus: number
+    mean_unserved: number
+  }[]
+  /** How far the lakes must rise before each place / road goes underwater (ascending). */
+  facilities: { name: string; type: string; flood_rise_m: number }[]
+  roads: { name: string; flood_rise_m: number }[]
+  garage_flood_rise_m?: number | null
 }
 
 export interface RobustnessVariant {

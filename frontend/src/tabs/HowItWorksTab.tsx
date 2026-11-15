@@ -13,6 +13,7 @@ const SOURCES: [string, string][] = [
   ['LEHD LODES 2022', 'Who is downtown during the day (workers)'],
   ['CMS', 'Nursing-home residents per day'],
   ['DOT Emergency Response Guidebook 2024', 'Danger-zone distances by chemical, spill and wind'],
+  ['USGS 3DEP elevation', 'Ground height every 20 m, for floods'],
 ]
 
 const STEPS: { title: string; body: string; see: string }[] = [
@@ -59,6 +60,7 @@ const LIMITS = [
   'In light wind the official zone (6–7+ miles for a chlorine tank car) is longer than the study area; the map edge is treated as safe.',
   'Assisted-living facilities are not in the federal nursing-home list, and students are missing from daytime worker data.',
   'Each bus makes one trip. Shelters are large public buildings we chose, not official city designations.',
+  "Floods use a 'bathtub' model of lake level — no rainfall runoff, storm sewers or river flow speed.",
 ]
 
 export function HowItWorksTab({ onGo, onDemo }: Props) {
@@ -126,6 +128,25 @@ export function HowItWorksTab({ onGo, onDemo }: Props) {
 
       <section className="how-section">
         <div className="how-num">3</div>
+        <div className="how-body">
+          <h3>Floods: when the lakes rise</h3>
+          <p>
+            The same planner also handles a flood: Lake Mendota and/or Lake Monona (with the Yahara River below it) rise by a
+            set height over a set number of hours. Only the first step changes; the waves, traffic simulation and bus routing
+            after it are exactly the same.
+          </p>
+          <ul className="limits">
+            <li><b>Ground height.</b> USGS 3DEP elevation, sampled every 20 m across the study area.</li>
+            <li><b>Where water can actually go.</b> A priority-flood algorithm finds, for every 20 m cell, how far a lake must rise before water can flow there. It has to connect to the lake: a low spot behind high ground stays dry.</li>
+            <li><b>Danger zone and arrival time.</b> Cells reached at the peak rise are the danger zone. The lake rises steadily, so water reaches a cell when the lake level passes that cell&apos;s height.</li>
+            <li><b>Roads.</b> Flooded roads close, and &quot;away from the danger&quot; means toward higher ground.</li>
+          </ul>
+          <p className="muted small-note">On the map: light blue water spreading over time (press Play), the dashed outline of the peak flood, and the rising lake in a stronger blue.</p>
+        </div>
+      </section>
+
+      <section className="how-section">
+        <div className="how-num">4</div>
         <div className="how-body">
           <h3>Run everything: 576 scenarios on Databricks</h3>
           <div className="grid-eq">
