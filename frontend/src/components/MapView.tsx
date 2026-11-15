@@ -4,7 +4,7 @@ import { FlyToInterpolator, WebMercatorViewport, type PickingInfo } from '@deck.
 import { GeoJsonLayer, PathLayer, ScatterplotLayer, SolidPolygonLayer, TextLayer } from '@deck.gl/layers'
 import { HeatmapLayer } from '@deck.gl/aggregation-layers'
 import { PathStyleExtension, type PathStyleExtensionProps } from '@deck.gl/extensions'
-import { Map } from 'react-map-gl/maplibre'
+import { Map, type MapEvent } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import '../lib/maplibreWorker'
 import type { FeatureCollection, Polygon } from 'geojson'
@@ -18,6 +18,34 @@ import type { Selection } from './InfoCard'
 const INITIAL_VIEW = { longitude: -89.374, latitude: 43.075, zoom: 13.5, pitch: 0, bearing: 0 }
 const BASEMAP = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
 const MAX_PARTICLES = 4000
+const WATER = '#0e1a2b'
+const SHORE = '#1e293b'
+
+/** Tint the basemap's lakes navy with a shoreline, so the isthmus between Mendota and Monona reads at a glance. */
+function styleWater(e: MapEvent) {
+  const map = e.target
+  const layers = map.getStyle()?.layers ?? []
+  let first: (typeof layers)[number] | null = null
+  for (const l of layers) {
+    if (l.type !== 'fill' || !/water/i.test(l.id)) continue
+    map.setPaintProperty(l.id, 'fill-color', /shadow/i.test(l.id) ? 'rgba(0,0,0,0)' : WATER)
+    if (!/shadow/i.test(l.id)) first ??= l
+  }
+  if (first && 'source' in first && !map.getLayer('isthmus-shoreline')) {
+    const idx = layers.indexOf(first)
+    map.addLayer(
+      {
+        id: 'isthmus-shoreline',
+        type: 'line',
+        source: first.source as string,
+        ...('source-layer' in first && first['source-layer'] ? { 'source-layer': first['source-layer'] as string } : {}),
+        ...('filter' in first && first.filter ? { filter: first.filter } : {}),
+        paint: { 'line-color': SHORE, 'line-width': 1.2 },
+      },
+      layers[idx + 1]?.id,
+    )
+  }
+}
 const ROAD_WEIGHT: Record<string, number> = {
   motorway: 1.6, trunk: 1.6, primary: 1.5, secondary: 1.35, tertiary: 1.2,
   motorway_link: 1.2, trunk_link: 1.2, primary_link: 1.2, secondary_link: 1.1, tertiary_link: 1.05,
@@ -31,6 +59,7 @@ export interface LayerToggles {
   traffic: boolean
   buses: boolean
   frequency: boolean
+  stops: boolean // "Bus stops" focus mode: every stop drawn large
 }
 
 interface Props {
@@ -97,6 +126,10 @@ interface Particle {
 
 export function MapView({ result, derived, rail, params, toggles, time, onPickRelease, hoveredBus: hoverBus, setHoveredBus, blockGeo, frequency, frequencyMax, selection, onSelect, fitTo, railOnly }: Props) {
   const initialViewState = useMemo(() => fitView(fitTo), [fitTo])
+  // Track the camera so road labels can be HTML (crisp glass pills) that follow the map.
+  const [view, setView] = useState<{ longitude: number; latitude: number; zoom: number }>(INITIAL_VIEW)
+  const [size, setSize] = useState<{ width: number; height: number }>({ width: window.innerWidth, height: window.innerHeight })
+  const live = time != null // scrubbing or playing: traffic takes the stage
   // A clicked bus stays highlighted like a hovered one.
   const hoveredBus = hoverBus ?? (selection?.kind === 'bus' ? selection.id : null)
   const selectedBlock = selection?.kind === 'block' ? selection.id : null
@@ -126,7 +159,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
   const bottleneckLabels = useMemo(() => {
     if (!result) return []
     const seen = new Set<string>()
-    const out: { position: [number, number]; text: string; priority: number }[] = []
+    const out: { position: [number, number]; text: string; load: number }[] = []
     // Prefer major roads: a primary street at 1.2x load outranks a residential court at 1.4x.
     const score = (f: EdgeFeature) => f.properties.peak_load_ratio * (ROAD_WEIGHT[f.properties.road_class ?? ''] ?? 1)
     const sorted = result.edges.features.filter((f) => f.properties.is_bottleneck && f.properties.name).sort((a, b) => score(b) - score(a))
@@ -136,7 +169,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       const position = along(f.geometry.coordinates as [number, number][], 0.5)
       if (out.some((o) => distM(o.position, position) < 500)) continue // keep labels from stacking
       seen.add(name)
-      out.push({ position, text: name, priority: 3 - out.length })
+      out.push({ position, text: name, load: f.properties.peak_load_ratio })
       if (out.length === 3) break
     }
     return out
@@ -194,7 +227,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
     new GeoJsonLayer({
       id,
       data: zones,
-      opacity,
+      opacity: opacity * (live ? 0.45 : 1),
       filled: true,
       stroked: true,
       getFillColor: (f) => [...COLORS.zone, (f.properties as { kind: string }).kind === 'isolation' ? 85 : 38],
@@ -213,7 +246,8 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         id: 'dim-outside',
         data: dim.features,
         getPolygon: (f) => f.geometry.coordinates,
-        getFillColor: [3, 5, 9, 120],
+        getFillColor: [3, 5, 9, live ? 150 : 90],
+        updateTriggers: { getFillColor: [live] },
         opacity: zoneFade,
       }),
     toggles.heatmap &&
@@ -243,12 +277,13 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         data: derived.blockFeatures,
         filled: true,
         stroked: true,
-        getFillColor: (f) => blockColor(f.properties, toggles.heatmap || toggles.frequency ? 60 : 150),
-        getLineColor: (f) => (f.properties.decision === 'outside' ? [120, 130, 145, 40] : [10, 12, 16, 160]),
-        lineWidthMinPixels: 0.6,
+        // Light wash (~0.32) with a thin edge of the same colour, so streets and routes stay readable.
+        getFillColor: (f) => blockColor(f.properties, toggles.heatmap || toggles.frequency ? 50 : live ? 40 : 82),
+        getLineColor: (f) => (f.properties.decision === 'outside' ? [120, 130, 145, 28] : blockColor(f.properties, live ? 60 : 120)),
+        lineWidthMinPixels: 0.5,
         pickable: !toggles.frequency,
         transitions: { getFillColor: 450 },
-        updateTriggers: { getFillColor: [toggles.heatmap, toggles.frequency] },
+        updateTriggers: { getFillColor: [toggles.heatmap, toggles.frequency, live], getLineColor: [live] },
       }),
     derived &&
       selectedBlock != null &&
@@ -297,15 +332,18 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         id: 'edges',
         data: result.edges.features,
         getPath: (f) => f.geometry.coordinates as [number, number][],
-        getColor: (f) => loadColor(edgeLoadNow.get(f.properties.edge_id) ?? 0),
-        getWidth: (f) => (f.properties.is_bottleneck ? 10 : 3.5),
+        getColor: (f) => {
+          const load = edgeLoadNow.get(f.properties.edge_id) ?? 0
+          return loadColor(load, live ? (load < 0.05 ? 70 : 255) : 235)
+        },
+        getWidth: (f) => (f.properties.is_bottleneck ? (live ? 11 : 9) : live ? 4.5 : 3),
         widthUnits: 'pixels',
         widthMinPixels: 2,
         capRounded: true,
         jointRounded: true,
         pickable: true,
-        updateTriggers: { getColor: [edgeLoadNow] },
-        transitions: { getColor: 250 },
+        updateTriggers: { getColor: [edgeLoadNow, live], getWidth: [live] },
+        transitions: { getColor: 250, getWidth: 300 },
       }),
     toggles.roads &&
       result &&
@@ -326,8 +364,9 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         data: particles,
         getPosition: (d) => d.position,
         getFillColor: (d) => (d.load > 1 ? [255, 235, 220, 230] : [235, 245, 255, 200]),
-        getRadius: 2.2,
+        getRadius: live ? 2.8 : 2.2,
         radiusUnits: 'pixels',
+        updateTriggers: { getRadius: [live] },
       }),
     rail &&
       new PathLayer({
@@ -375,16 +414,22 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         id: 'bus-stops',
         data: derived.stops.filter((s) => s.position != null),
         getPosition: (s) => s.position!,
-        getFillColor: (s) =>
-          s.kind === 'garage' ? [40, 50, 66, 255] : s.kind === 'shelter' ? [...COLORS.onTime, 255] : s.late ? [...COLORS.late, 255] : [245, 248, 252, 255],
-        getLineColor: (s) => (s.kind === 'pickup' ? (s.late ? [255, 200, 200, 255] : [...COLORS.bus, 255]) : [230, 236, 245, 255]),
-        getRadius: (s) => (s.kind === 'pickup' ? (s.bus_id === hoveredBus ? 5 : 3.2) : 6),
+        // Quiet by default (small muted blue dots); a hovered/selected bus or "Bus stops" focus enlarges them.
+        getFillColor: (s) => {
+          const focus = toggles.stops || s.bus_id === hoveredBus
+          if (s.kind === 'garage') return [40, 50, 66, 255]
+          if (s.kind === 'shelter') return [...COLORS.onTime, 230]
+          if (s.late) return [...COLORS.late, 255]
+          return focus ? [245, 248, 252, 255] : [59, 130, 246, 153]
+        },
+        getLineColor: (s) => (s.kind === 'pickup' ? [...COLORS.bus, 255] : [230, 236, 245, 220]),
+        getLineWidth: (s) => (s.kind !== 'pickup' || toggles.stops || s.bus_id === hoveredBus ? 1.5 : 0),
+        lineWidthUnits: 'pixels',
+        getRadius: (s) => (s.kind === 'pickup' ? (toggles.stops || s.bus_id === hoveredBus ? 4.5 : 2.4) : 5),
         radiusUnits: 'pixels',
         stroked: true,
-        lineWidthMinPixels: 1.5,
-        updateTriggers: { getRadius: [hoveredBus] },
+        updateTriggers: { getRadius: [hoveredBus, toggles.stops], getFillColor: [hoveredBus, toggles.stops], getLineWidth: [hoveredBus, toggles.stops] },
         pickable: true,
-        opacity: hoveredBus == null ? 1 : 0.9,
       }),
     toggles.buses &&
       derived &&
@@ -434,29 +479,6 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       stroked: true,
       lineWidthMinPixels: 4,
     }),
-    toggles.roads &&
-      new TextLayer({
-        id: 'bottleneck-labels',
-        data: bottleneckLabels,
-        getPosition: (d) => d.position,
-        getText: (d) => d.text,
-        // Sit beside the road, not on it: anchored at the label's corner and pushed off the line,
-        // and the collision filter drops a label that would cover another one.
-        getSize: 12.5,
-        getColor: [247, 248, 248, 255],
-        getTextAnchor: 'start',
-        getAlignmentBaseline: 'bottom',
-        getPixelOffset: [10, -10],
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontWeight: 600,
-        characterSet: 'auto',
-        background: true,
-        getBackgroundColor: [15, 16, 17, 225],
-        getBorderColor: [239, 68, 68, 200],
-        getBorderWidth: 1,
-        backgroundPadding: [6, 3, 6, 3],
-        pickable: false,
-      }),
   ].filter(Boolean)
 
   const onHover = (info: PickingInfo) => {
@@ -515,14 +537,38 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       <DeckGL
         ref={deckRef}
         initialViewState={initialViewState}
+        onViewStateChange={({ viewState }) => {
+          const v = viewState as { longitude: number; latitude: number; zoom: number }
+          // deck may call this while it renders (camera transitions), so update React state just after.
+          queueMicrotask(() => setView({ longitude: v.longitude, latitude: v.latitude, zoom: v.zoom }))
+        }}
+        onResize={(sz) => queueMicrotask(() => setSize(sz))}
         controller={{ dragRotate: false }}
         layers={layers}
         onHover={onHover}
         pickingRadius={6}
         getCursor={({ isDragging }) => (isDragging ? 'grabbing' : hover?.layer === 'rail-hit' ? 'crosshair' : hover ? 'pointer' : 'grab')}
       >
-        <Map mapStyle={BASEMAP} attributionControl={{ compact: true }} />
+        <Map mapStyle={BASEMAP} attributionControl={{ compact: true }} onLoad={styleWater} />
       </DeckGL>
+      {toggles.roads && bottleneckLabels.length > 0 && (
+        <div className={`road-pins ${live ? 'live' : ''}`} aria-hidden>
+          {bottleneckLabels.map((l) => {
+            const vp = new WebMercatorViewport({ ...view, width: size.width, height: size.height })
+            const [x, y] = vp.project(l.position)
+            if (x < -200 || y < -50 || x > size.width + 50 || y > size.height + 50) return null
+            return (
+              <div key={l.text} className="road-pin" style={{ transform: `translate(${x}px, ${y}px)` }}>
+                <i className="road-anchor" />
+                <span className="road-pill">
+                  <i className={`sev ${l.load > 1.2 ? 'red' : 'amber'}`} />
+                  {l.text}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
       {hover && result && <Tooltip info={hover} result={result} derived={derived} edgeLoadNow={edgeLoadNow} time={time} frequency={frequency} />}
     </div>
   )

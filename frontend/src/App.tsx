@@ -48,7 +48,7 @@ export default function App() {
   const { params, setParams, update, result, source, loading, error, run, autoRun, setAutoRun } = useScenario()
   const [rail, setRail] = useState<RailCollection | null>(null)
   const [pickHint, setPickHint] = useState<string | null>(null)
-  const [toggles, setToggles] = useState<LayerToggles>({ blocks: true, heatmap: false, roads: true, traffic: true, buses: true, frequency: false })
+  const [toggles, setToggles] = useState<LayerToggles>({ blocks: true, heatmap: false, roads: true, traffic: true, buses: true, frequency: false, stops: false })
   const [time, setTime] = useState<number | null>(null)
   const [playing, setPlaying] = useState(false)
   const [hoveredBus, setHoveredBus] = useState<number | null>(null)

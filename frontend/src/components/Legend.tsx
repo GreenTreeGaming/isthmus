@@ -14,6 +14,7 @@ const LAYERS: [keyof LayerToggles, string][] = [
   ['roads', 'Road load'],
   ['traffic', 'Animated traffic'],
   ['buses', 'Bus routes'],
+  ['stops', 'Bus stops (focus)'],
   ['heatmap', 'Residents who need help'],
   ['frequency', 'How often told to shelter'],
 ]
