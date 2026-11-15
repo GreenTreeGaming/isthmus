@@ -30,6 +30,13 @@ const SOURCE_LABEL: Record<string, [string, string]> = {
   real: ['Live engine', 'ok'],
 }
 
+const TABS: [Tab, string][] = [
+  ['live', 'Live scenario'],
+  ['how', 'How it works'],
+  ['planning', 'Planning'],
+  ['assumptions', 'Assumptions'],
+]
+
 const TOD_SHORT: Record<string, string> = { night: 'Night', day: 'Day', gameday: 'Game day' }
 function shortLabel(p: ScenarioParams) {
   return `${TOD_SHORT[p.time_of_day]}, ${p.wind_speed_mps} m/s, ${p.bus_count} buses${p.contraflow ? ', contraflow' : ''}`
@@ -193,36 +200,34 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden>
-            <rect width="32" height="32" rx="7" fill="#151c26" />
-            <path d="M4 22c6-1 9-5 12-9s6-6 12-7" stroke="#ff8a1f" strokeWidth="3" fill="none" strokeLinecap="round" />
-            <circle cx="16" cy="13" r="3.2" fill="#ef4444" />
+            <rect width="32" height="32" rx="8" fill="#141516" stroke="#23252a" />
+            <path d="M5 22c6-1 9-5 11-9s6-6 11-7" stroke="#5e6ad2" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+            <circle cx="16" cy="13" r="3" fill="#f7f8f8" />
           </svg>
           <div>
             <div className="brand-name">Isthmus</div>
             <div className="brand-sub">Hazmat evacuation planner · Downtown Madison</div>
           </div>
         </div>
-        <nav className="tabs" role="tablist">
-          {(
-            [
-              ['live', 'Live scenario'],
-              ['how', 'How it works'],
-              ['planning', 'Planning'],
-              ['assumptions', 'Assumptions'],
-            ] as [Tab, string][]
-          ).map(([k, label]) => (
+        <nav className="tabs" role="tablist" aria-label="Views" style={{ '--i': TABS.findIndex(([k]) => k === tab) } as React.CSSProperties}>
+          <span className="tab-ink" aria-hidden />
+          {TABS.map(([k, label]) => (
             <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
               {label}
             </button>
           ))}
         </nav>
-        <button className={`demo-btn ${demo != null ? 'on' : ''}`} onClick={() => (demo == null ? goDemo(0) : exitDemo())}>
-          {demo == null ? '▶ Demo' : '■ Exit demo'}
-        </button>
-        <button className="help-btn" onClick={() => setWelcome(true)} title="What is this? How to read the map" aria-label="About Isthmus">?</button>
         <div className="status">
-          {tab === 'live' && srcLabel && <span className={`badge ${srcTone}`}>{srcLabel}</span>}
-          {tab === 'live' && loading && <span className="badge"><span className="spinner sm" /> Simulating</span>}
+          {tab === 'live' && (
+            <span className="badge mono" title="Engine time for the current scenario">
+              {loading ? <><span className="spinner sm" /> Simulating</> : result ? `${result.summary.runtime_ms.toLocaleString('en-US')} ms` : '—'}
+            </span>
+          )}
+          {srcLabel && <span className={`badge ${srcTone}`}><i className="badge-dot" aria-hidden />{srcLabel}</span>}
+          <button className={`btn-secondary ${demo != null ? 'on' : ''}`} onClick={() => (demo == null ? goDemo(0) : exitDemo())}>
+            {demo == null ? 'Guided demo' : 'Exit demo'}
+          </button>
+          <button className="icon-btn bordered" onClick={() => setWelcome(true)} title="What is this? How to read the map" aria-label="About Isthmus">?</button>
         </div>
         {loading && <div className="progress" />}
       </header>
@@ -269,17 +274,17 @@ export default function App() {
           <div className="overlay-top">
             <ScenarioStrip params={params} railName={railName} place={place}>
               {pinned ? (
-                <button className="chip pinned" onClick={() => setPinned(null)} title="Stop comparing">
-                  vs. {pinned.label} <span aria-hidden>✕</span>
+                <button className="btn-secondary sm pinned" onClick={() => setPinned(null)} title="Stop comparing">
+                  Comparing with {pinned.label} <span aria-hidden>✕</span>
                 </button>
               ) : (
                 <button
-                  className="chip"
+                  className="btn-secondary sm"
                   disabled={!result || loading}
                   onClick={() => result && setPinned({ summary: result.summary, label: shortLabel(result.params) })}
                   title="Save this result; the next runs show what changed"
                 >
-                  📌 Pin result
+                  Pin result
                 </button>
               )}
             </ScenarioStrip>
@@ -290,7 +295,9 @@ export default function App() {
                 onClick={() => setStoryOpen((o) => !o)}
                 title={storyOpen ? 'Collapse' : 'Show the full summary'}
               >
-                <b>What this plan says:</b> {planStory(result, railName)}
+                <i className={`status-dot ${result.summary.need_bus_unserved > 0 ? 'bad' : 'ok'}`} aria-hidden />
+                <span className="eyebrow">Plan</span>
+                <span className="story-text">{planStory(result, railName)}</span>
               </button>
             )}
           </div>

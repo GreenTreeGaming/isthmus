@@ -69,11 +69,11 @@ function fitView(z: Zones | null) {
   const bb = z && zonesBBox(z)
   if (!bb) return INITIAL_VIEW
   const width = window.innerWidth
-  const height = Math.max(300, window.innerHeight - 56)
+  const height = Math.max(300, window.innerHeight) // the map is full-bleed under the header
   const panel = width > 1700 ? 330 : width > 1280 ? 300 : 272
   try {
     const v = new WebMercatorViewport({ width, height }).fitBounds(bb, {
-      padding: { left: panel + 40, right: Math.min(280, width * 0.2), top: Math.min(230, height * 0.33), bottom: Math.min(220, height * 0.32) },
+      padding: { left: panel + 40, right: Math.min(280, width * 0.2), top: Math.min(280, height * 0.38), bottom: Math.min(200, height * 0.28) },
       maxZoom: 15,
     })
     return { longitude: v.longitude, latitude: v.latitude, zoom: v.zoom, pitch: 0, bearing: 0, transitionDuration: 1400, transitionInterpolator: new FlyToInterpolator() }
@@ -126,7 +126,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
   const bottleneckLabels = useMemo(() => {
     if (!result) return []
     const seen = new Set<string>()
-    const out: { position: [number, number]; text: string }[] = []
+    const out: { position: [number, number]; text: string; priority: number }[] = []
     // Prefer major roads: a primary street at 1.2x load outranks a residential court at 1.4x.
     const score = (f: EdgeFeature) => f.properties.peak_load_ratio * (ROAD_WEIGHT[f.properties.road_class ?? ''] ?? 1)
     const sorted = result.edges.features.filter((f) => f.properties.is_bottleneck && f.properties.name).sort((a, b) => score(b) - score(a))
@@ -136,7 +136,7 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
       const position = along(f.geometry.coordinates as [number, number][], 0.5)
       if (out.some((o) => distM(o.position, position) < 500)) continue // keep labels from stacking
       seen.add(name)
-      out.push({ position, text: name })
+      out.push({ position, text: name, priority: 3 - out.length })
       if (out.length === 3) break
     }
     return out
@@ -378,10 +378,11 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         getFillColor: (s) =>
           s.kind === 'garage' ? [40, 50, 66, 255] : s.kind === 'shelter' ? [...COLORS.onTime, 255] : s.late ? [...COLORS.late, 255] : [245, 248, 252, 255],
         getLineColor: (s) => (s.kind === 'pickup' ? (s.late ? [255, 200, 200, 255] : [...COLORS.bus, 255]) : [230, 236, 245, 255]),
-        getRadius: (s) => (s.kind === 'pickup' ? 5 : 7),
+        getRadius: (s) => (s.kind === 'pickup' ? (s.bus_id === hoveredBus ? 5 : 3.2) : 6),
         radiusUnits: 'pixels',
         stroked: true,
-        lineWidthMinPixels: 2,
+        lineWidthMinPixels: 1.5,
+        updateTriggers: { getRadius: [hoveredBus] },
         pickable: true,
         opacity: hoveredBus == null ? 1 : 0.9,
       }),
@@ -439,17 +440,22 @@ export function MapView({ result, derived, rail, params, toggles, time, onPickRe
         data: bottleneckLabels,
         getPosition: (d) => d.position,
         getText: (d) => d.text,
-        getSize: 14,
-        getColor: [255, 255, 255, 255],
-        getPixelOffset: [0, -22],
+        // Sit beside the road, not on it: anchored at the label's corner and pushed off the line,
+        // and the collision filter drops a label that would cover another one.
+        getSize: 12.5,
+        getColor: [247, 248, 248, 255],
+        getTextAnchor: 'start',
+        getAlignmentBaseline: 'bottom',
+        getPixelOffset: [10, -10],
         fontFamily: 'Inter, system-ui, sans-serif',
-        fontWeight: 700,
+        fontWeight: 600,
         characterSet: 'auto',
         background: true,
-        getBackgroundColor: [150, 20, 20, 235],
-        getBorderColor: [255, 120, 120, 255],
+        getBackgroundColor: [15, 16, 17, 225],
+        getBorderColor: [239, 68, 68, 200],
         getBorderWidth: 1,
-        backgroundPadding: [7, 4, 7, 4],
+        backgroundPadding: [6, 3, 6, 3],
+        pickable: false,
       }),
   ].filter(Boolean)
 
